@@ -68,14 +68,17 @@ dev-setup: install-dev pre-commit-install ## Set up development environment
 	@echo "Development environment setup complete!"
 	@echo "Run 'make check' to run all quality checks"
 
+version: ## Show current version
+	$(UVX) bump-my-version show-bump --config-file pyproject.toml
+
 version-patch: ## Bump patch version
-	$(UV) run bump-my-version bump patch
+	$(UVX) bump-my-version bump patch
 
 version-minor: ## Bump minor version
-	$(UV) run bump-my-version bump minor
+	$(UVX) bump-my-version bump minor
 
 version-major: ## Bump major version
-	$(UV) run bump-my-version bump major
+	$(UVX) bump-my-version bump major
 
 watch-test: ## Run tests in watch mode
 	$(UV) run ptw
