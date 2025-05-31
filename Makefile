@@ -1,4 +1,4 @@
-.PHONY: help install install-dev clean lint format test type-check pre-commit build publish publish-test clean-build
+.PHONY: help install install-dev clean lint format test type-check pre-commit build publish publish-test clean-build tox tox-lint tox-type-check tox-cov tox-clean check-all
 .DEFAULT_GOAL := help
 
 # Variables
@@ -59,10 +59,10 @@ build: clean-build ## Build the package
 	$(UV) build
 
 publish-test: build ## Publish to TestPyPI
-	$(UV) publish --repository testpypi
+	$(UV) publish --index testpypi
 
 publish: build ## Publish to PyPI
-	$(UV) publish
+	$(UV) publish --username __token__ --keyring-provider subprocess --publish-url 'https://upload.pypi.org/legacy/?async_task_pipeline'
 
 dev-setup: install-dev pre-commit-install ## Set up development environment
 	@echo "Development environment setup complete!"
@@ -79,3 +79,21 @@ version-major: ## Bump major version
 
 watch-test: ## Run tests in watch mode
 	$(UV) run ptw
+
+tox: ## Run tests across all Python versions with tox
+	$(UVX) tox
+
+tox-lint: ## Run linting with tox
+	$(UVX) tox -e lint
+
+tox-type-check: ## Run type checking with tox
+	$(UVX) tox -e type-check
+
+tox-cov: ## Run coverage tests with tox
+	$(UVX) tox -e cov
+
+tox-clean: ## Clean tox environments
+	$(UVX) tox -e clean
+	rm -rf .tox/
+
+check-all: format lint type-check test tox ## Run all checks including tox multi-version testing
