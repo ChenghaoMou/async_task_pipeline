@@ -1,24 +1,35 @@
+from collections.abc import Callable
 import functools
 import time
-from typing import Any, Callable, TypeVar, cast
+from typing import Any
+from typing import TypeVar
+from typing import cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from pydantic import Field
+
+from async_task_pipeline.base.sentinel import EndSentinel
+from async_task_pipeline.base.sentinel import FlushSentinel
 
 from ..utils.metrics import DetailedTiming
 
 T = TypeVar("T")
 
+
 def _wrapper(func: Callable[..., T]) -> Callable[..., T | None]:
     """Wrapper a function to return None if timing is disabled"""
+
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> T | None:
         if not args:
             return None
-        _self = cast('PipelineItem', args[0])
+        _self = cast("PipelineItem", args[0])
         if _self.enable_timing:
             return func(*args, **kwargs)
         return None
+
     return wrapper
+
 
 class PipelineItem(BaseModel):
     """
@@ -61,9 +72,7 @@ class PipelineItem(BaseModel):
         self._stage_timestamps[stage_name] = time.perf_counter()
 
     @_wrapper
-    def record_detailed_timing(
-        self, stage_name: str, detailed_timing: DetailedTiming
-    ) -> None:
+    def record_detailed_timing(self, stage_name: str, detailed_timing: DetailedTiming) -> None:
         """Record detailed timing for a stage"""
         self._detailed_timings[stage_name] = detailed_timing
 
@@ -124,15 +133,11 @@ class PipelineItem(BaseModel):
                 "queue_wait_time": timing.queue_wait_time,
                 "computation_time": timing.computation_time,
                 "transmission_time": timing.transmission_time,
-                "total_stage_time": timing.queue_wait_time
-                + timing.computation_time
-                + timing.transmission_time,
+                "total_stage_time": timing.queue_wait_time + timing.computation_time + timing.transmission_time,
             }
 
         total_latency = self.get_total_latency()
-        events: list[tuple[float, str, str | None]] = [
-            (self.start_timestamp, "start", None)
-        ]
+        events: list[tuple[float, str, str | None]] = [(self.start_timestamp, "start", None)]
 
         for stage_name, timing in self._detailed_timings.items():
             events.append((timing.processing_start_time, "compute_start", stage_name))
@@ -159,18 +164,17 @@ class PipelineItem(BaseModel):
         if computing_stages and last_time < end_time:
             total_computation_time += end_time - last_time
 
-        total_overhead_time = (
-            total_latency - total_computation_time if total_latency else 0.0
-        )
+        total_overhead_time = total_latency - total_computation_time if total_latency else 0.0
 
         if breakdown:
             breakdown["totals"] = {
                 "total_computation_time": total_computation_time,
                 "total_overhead_time": total_overhead_time,
                 "total_latency": total_latency if total_latency is not None else 0.0,
-                "computation_ratio": (total_computation_time / total_latency)
-                if total_latency
-                else 0.0,
+                "computation_ratio": (total_computation_time / total_latency) if total_latency else 0.0,
             }
 
         return breakdown
+
+
+type Message = PipelineItem | FlushSentinel | EndSentinel

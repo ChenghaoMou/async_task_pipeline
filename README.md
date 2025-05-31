@@ -136,6 +136,84 @@ python example.py --enable-timing
 
 The example demonstrates a 4-stage pipeline processing 50 items with simulated CPU-intensive tasks.
 
+## Development
+
+This project uses modern Python development tools managed through a Makefile and `uv`.
+
+### Quick Setup
+
+```bash
+# Install development dependencies and set up pre-commit hooks
+make dev-setup
+
+# Run all quality checks
+make check
+```
+
+### Available Commands
+
+```bash
+# Development setup
+make install          # Install the package
+make install-dev      # Install with development dependencies
+make dev-setup        # Complete development environment setup
+
+# Code quality
+make format           # Format code with ruff
+make lint             # Lint code with ruff
+make type-check       # Run type checking with mypy
+make test             # Run tests with pytest
+make test-cov         # Run tests with coverage
+make check            # Run all quality checks
+
+# Pre-commit
+make pre-commit-install  # Install pre-commit hooks
+make pre-commit         # Run pre-commit on all files
+
+# Building and publishing
+make build            # Build the package
+make publish-test     # Publish to TestPyPI
+make publish          # Publish to PyPI
+
+# Version management
+make version-patch    # Bump patch version
+make version-minor    # Bump minor version
+make version-major    # Bump major version
+
+# Utilities
+make clean            # Clean up cache and build files
+make watch-test       # Run tests in watch mode
+make help             # Show all available commands
+```
+
+### Code Quality Standards
+
+This project enforces high code quality standards:
+
+- **Formatting**: `ruff format` for consistent code style
+- **Linting**: `ruff check` for code quality and best practices
+- **Type Checking**: `mypy` for static type analysis
+- **Testing**: `pytest` with coverage reporting
+- **Pre-commit hooks**: Automated checks before each commit
+- **Security**: `bandit` for security vulnerability scanning
+
+### Publishing Workflow
+
+1. Make your changes and ensure all tests pass:
+   ```bash
+   make check
+   ```
+
+2. Bump the version:
+   ```bash
+   make version-patch  # or version-minor/version-major
+   ```
+
+3. Build and publish:
+   ```bash
+   make publish  # or publish-test for TestPyPI
+   ```
+
 ## When to Use
 
 - Streaming data with CPU-heavy processing

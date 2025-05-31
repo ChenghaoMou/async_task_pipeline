@@ -1,7 +1,7 @@
 [project]
 name = "async-task-pipeline"
 version = "0.1.0"
-description = "Add your description here"
+description = "A framework for processing streaming data through CPU-intensive tasks while maintaining order and tracking latency"
 readme = "README.md"
 authors = [
     { name = "Chenghao Mou", email = "mouchenghao@gmail.com" }
@@ -10,10 +10,121 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.11.5",
 ]
+keywords = ["async", "pipeline", "streaming", "data-processing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Distributed Computing",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-asyncio>=0.24.0",
+    "mypy>=1.8.0",
+    "ruff>=0.7.0",
+    "pre-commit>=4.0.0",
+    "bump-my-version>=0.26.0",
+    "pytest-watch>=4.2.0",
+]
+
+
+[project.urls]
+Homepage = "https://github.com/mouchenghao/async-task-pipeline"
+Repository = "https://github.com/mouchenghao/async-task-pipeline"
+Issues = "https://github.com/mouchenghao/async-task-pipeline/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/async_task_pipeline/__init__.py"
+
+# [tool.hatch.build.targets.wheel]
+# packages = ["src/async_task_pipeline"]
+
 [tool.mypy]
 plugins = ["pydantic.mypy"]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+]
+ignore = [
+    "E501",  # line too long, handled by ruff format
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["async_task_pipeline"]
+force-sort-within-sections = true
+force-single-line = true
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.bump-my-version]
+current_version = "0.1.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = false
+tag = true
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+
+[[tool.bump-my-version.files]]
+filename = "src/async_task_pipeline/__init__.py"
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B601"]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.0.0",
+]

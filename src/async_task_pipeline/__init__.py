@@ -1,2 +1,4 @@
-def hello() -> str:
-    return "Hello from async-task-pipeline!"
+"""Async Task Pipeline - A framework for processing streaming data through CPU-intensive tasks."""
+
+__version__ = "0.1.0"
+__all__ = ["__version__"]

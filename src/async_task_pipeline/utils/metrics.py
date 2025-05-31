@@ -1,9 +1,9 @@
-
 from pydantic import BaseModel
 
 
 class DetailedTiming(BaseModel):
     """Detailed timing information for a pipeline stage"""
+
     queue_enter_time: float
     processing_start_time: float
     processing_end_time: float
