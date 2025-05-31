@@ -1,0 +1,144 @@
+# Async CPU-Intensive Task Pipeline
+
+A framework for processing streaming data through CPU-intensive tasks while maintaining order and tracking latency.
+
+## Overview
+
+Combines async I/O with threaded CPU processing:
+- **Async streams**: Non-blocking input/output
+- **Pipeline parallelism**: Each stage runs in its own thread
+- **Order preservation**: Output maintains input sequence
+- **Latency tracking**: Monitor end-to-end and per-stage performance
+
+## Workflow
+
+```mermaid
+sequenceDiagram
+    participant Input as Async Input Stream
+    participant Main as Main Thread<br/>(Asyncio Event Loop)
+    participant Q1 as Input Queue
+    participant T1 as Thread 1<br/>(Stage 1: Validate)
+    participant Q2 as Queue 1
+    participant T2 as Thread 2<br/>(Stage 2: Transform)
+    participant Q3 as Queue 2
+    participant T3 as Thread 3<br/>(Stage 3: Serialize)
+    participant Q4 as Output Queue
+    participant Output as Async Output Stream
+
+    Note over Main: Pipeline Parallelism - Multiple items processed simultaneously
+
+    Input->>Main: yield Item A
+    Main->>Q1: put Item A
+    Q1->>T1: get Item A
+
+    Input->>Main: yield Item B
+    Main->>Q1: put Item B
+    Q1->>T1: get Item B
+
+    par Item A flows through pipeline
+        T1->>Q2: put processed Item A
+        Q2->>T2: get Item A
+        T2->>Q3: put processed Item A
+        Q3->>T3: get Item A
+        T3->>Q4: put processed Item A
+    and Item B follows behind
+        T1->>Q2: put processed Item B
+        Q2->>T2: get Item B
+        T2->>Q3: put processed Item B
+    and Item C enters pipeline
+        Input->>Main: yield Item C
+        Main->>Q1: put Item C
+        Q1->>T1: get Item C
+        T1->>Q2: put processed Item C
+    end
+
+    Q4->>Main: get Item A (ordered)
+    Main->>Output: yield Item A
+
+    Q4->>Main: get Item B (ordered)
+    Main->>Output: yield Item B
+
+    Note over Main,Output: Output buffer ensures<br/>items maintain input order
+```
+
+The asyncio event loop handles I/O operations while each pipeline stage runs in its own thread for true CPU parallelism.
+
+## Quick Start
+
+```python
+import asyncio
+from async_task_pipeline import AsyncTaskPipeline
+
+# Create pipeline
+pipeline = AsyncTaskPipeline(max_queue_size=100)
+
+# Add processing stages
+pipeline.add_stage("validate", validate_function)
+pipeline.add_stage("transform", transform_function)
+pipeline.add_stage("serialize", serialize_function)
+
+# Start and run
+await pipeline.start()
+
+# Process streams concurrently
+await asyncio.gather(
+    pipeline.process_input_stream(your_input_stream()),
+    consume_output(pipeline.generate_output_stream())
+)
+
+await pipeline.stop()
+```
+
+## Usage Patterns
+
+### Basic Processing Function
+```python
+def cpu_intensive_task(data):
+    # Your CPU-heavy computation here
+    result = complex_computation(data)
+    return result
+```
+
+### Input Stream
+```python
+async def input_stream():
+    for item in data_source:
+        yield item
+        await asyncio.sleep(0)  # Yield control
+```
+
+### Output Consumer
+```python
+async def consume_output(output_stream):
+    async for result in output_stream:
+        # Handle processed result
+        print(f"Processed: {result}")
+```
+
+## Pipeline Management
+
+```python
+# Clear pipeline state
+pipeline.clear()
+
+# Stop gracefully
+await pipeline.stop()
+
+# Get performance metrics
+summary = pipeline.get_latency_summary()
+```
+
+## Running the Example
+
+```bash
+python example.py --enable-timing
+```
+
+The example demonstrates a 4-stage pipeline processing 50 items with simulated CPU-intensive tasks.
+
+## When to Use
+
+- Streaming data with CPU-heavy processing
+- Need to maintain input order in output
+- Want pipeline parallelism (different stages processing different items)
+- CPU processing is with libraries that release Python's GIL (NumPy, PyTorch, etc.)
