@@ -53,6 +53,7 @@ class AsyncTaskPipeline:
 
     async def stop(self) -> None:
         """Stop all pipeline stages"""
+        await self.end()
         self.running = False
         for stage in reversed(self.stages):
             stage.stop()
@@ -253,3 +254,13 @@ class AsyncTaskPipeline:
         if self.output_queue is not None:
             while not self.output_queue.empty():
                 self.output_queue.get()
+
+    async def flush(self) -> None:
+        """Flush the pipeline"""
+        if self.input_queue is not None:
+            await asyncio.get_event_loop().run_in_executor(None, self.input_queue.put, FlushSentinel())
+
+    async def end(self) -> None:
+        """End the pipeline"""
+        if self.input_queue is not None:
+            await asyncio.get_event_loop().run_in_executor(None, self.input_queue.put, EndSentinel())
