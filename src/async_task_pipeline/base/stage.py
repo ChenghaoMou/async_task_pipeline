@@ -65,7 +65,7 @@ class PipelineStage:
                 processing_end_time = time.perf_counter()
                 if isinstance(result_data, types.GeneratorType):
                     for result in result_data:
-                        new_item = item.copy()
+                        new_item = item.model_copy()
                         new_item.data = result
                         new_item.record_stage_completion(self.name)
                         self.output_queue.put(new_item)

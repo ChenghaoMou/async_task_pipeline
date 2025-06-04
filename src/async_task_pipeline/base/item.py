@@ -21,9 +21,7 @@ def _wrapper(func: Callable[..., T]) -> Callable[..., T | None]:
         if not args:
             return None
         _self = cast("PipelineItem", args[0])
-        if _self.enable_timing:
-            return func(*args, **kwargs)
-        return None
+        return func(*args, **kwargs) if _self.enable_timing else None
 
     return wrapper
 
@@ -52,7 +50,7 @@ class PipelineItem[DataT](BaseModel):
     _detailed_timings: dict[str, DetailedTiming]
     _queue_enter_times: dict[str, float]
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, context: Any) -> None:
         """Initialize the item"""
         self._stage_timestamps = {}
         self._detailed_timings = {}
@@ -124,22 +122,25 @@ class PipelineItem[DataT](BaseModel):
         if not self._detailed_timings or self.start_timestamp is None:
             return None
 
-        breakdown: dict[str, dict[str, float]] = {}
-        for stage_name, timing in self._detailed_timings.items():
-            breakdown[stage_name] = {
+        breakdown: dict[str, dict[str, float]] = {
+            stage_name: {
                 "queue_wait_time": timing.queue_wait_time,
                 "computation_time": timing.computation_time,
                 "transmission_time": timing.transmission_time,
                 "total_stage_time": timing.queue_wait_time + timing.computation_time + timing.transmission_time,
             }
-
+            for stage_name, timing in self._detailed_timings.items()
+        }
         total_latency = self.get_total_latency()
         events: list[tuple[float, str, str | None]] = [(self.start_timestamp, "start", None)]
 
         for stage_name, timing in self._detailed_timings.items():
-            events.append((timing.processing_start_time, "compute_start", stage_name))
-            events.append((timing.processing_end_time, "compute_end", stage_name))
-
+            events.extend(
+                (
+                    (timing.processing_start_time, "compute_start", stage_name),
+                    (timing.processing_end_time, "compute_end", stage_name),
+                )
+            )
         events.sort(key=lambda x: x[0])
 
         total_computation_time = 0.0

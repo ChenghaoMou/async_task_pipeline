@@ -8,7 +8,6 @@ from collections.abc import AsyncIterator
 from collections.abc import Callable
 import logging
 import time
-from typing import Any
 
 from async_task_pipeline.base.pipeline import AsyncTaskPipeline
 from async_task_pipeline.utils import log_pipeline_performance_analysis
@@ -43,7 +42,7 @@ if __name__ == "__main__":
 
         return process
 
-    async def example_input_stream(count: int = 10, delay: float = 0.1) -> AsyncIterator[str]:
+    async def example_input_stream(count: int = 10, delay: float = 0.1) -> AsyncIterator[str | Sentinel]:
         """Example async input stream generator"""
         global start_time
         for i in range(count):
@@ -53,9 +52,10 @@ if __name__ == "__main__":
             yield data
             if i == 0:
                 start_time = time.perf_counter()
+
         yield Sentinel()
 
-    async def example_output_consumer(output_stream: AsyncIterator[str]) -> None:
+    async def example_output_consumer(output_stream: AsyncIterator[str | Sentinel]) -> None:
         """Example async output consumer"""
         global start_time
         first_result = True
@@ -76,7 +76,7 @@ if __name__ == "__main__":
         )
 
         start_time = time.perf_counter()
-        pipeline = AsyncTaskPipeline[str](max_queue_size=500, enable_timing=args.enable_timing)
+        pipeline = AsyncTaskPipeline[str, Sentinel](max_queue_size=500, enable_timing=args.enable_timing)
         pipeline.add_stage("DataValidation", simulate_cpu_intensive_task("Validate", 0.010, 500))
         pipeline.add_stage("Transform1", simulate_cpu_intensive_task("Transform1", 0.050, 1500))
         pipeline.add_stage("Transform2", simulate_cpu_intensive_task("Transform2", 0.010, 1000))

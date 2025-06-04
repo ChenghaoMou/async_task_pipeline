@@ -10,20 +10,20 @@ from .item import PipelineItem
 from .stage import PipelineStage
 
 
-class AsyncTaskPipeline[T]:
+class AsyncTaskPipeline[T, U]:
     """Main pipeline orchestrator with async I/O and thread-based processing"""
 
-    def __init__(self, max_queue_size: int = 100, enable_timing: bool = True):
+    def __init__(self, max_queue_size: int = 100, enable_timing: bool = False):
         self.max_queue_size = max_queue_size
         self.stages: list[PipelineStage] = []
-        self.queues: list[queue.Queue[PipelineItem[T]]] = []
-        self.input_queue: queue.Queue[PipelineItem[T]] | None = None
-        self.output_queue: queue.Queue[PipelineItem[T]] | None = None
+        self.queues: list[queue.Queue[PipelineItem[T] | U]] = []
+        self.input_queue: queue.Queue[PipelineItem[T] | U] | None = None
+        self.output_queue: queue.Queue[PipelineItem[T] | U] | None = None
         self.running = False
         self.sequence_counter = 0
-        self.next_output_seq = 0
         self.completed_items: list[PipelineItem[T]] = []
         self.enable_timing = enable_timing
+        self._sleep_time = 0.001
 
     def add_stage(self, name: str, process_fn: Callable) -> None:
         """Add a processing stage to the pipeline"""
@@ -33,7 +33,7 @@ class AsyncTaskPipeline[T]:
         else:
             input_q = self.queues[-1]
 
-        output_q: queue.Queue[PipelineItem[T]] = queue.Queue(maxsize=self.max_queue_size)
+        output_q: queue.Queue[PipelineItem[T] | U] = queue.Queue(maxsize=self.max_queue_size)
         self.queues.append(output_q)
         self.output_queue = output_q
         stage = PipelineStage(name, process_fn, input_q, output_q, enable_timing=self.enable_timing)
@@ -88,11 +88,15 @@ class AsyncTaskPipeline[T]:
         except Exception as e:
             logger.error(f"Error processing input stream: {e}")
 
-    async def generate_output_stream(self) -> AsyncIterator[T]:
+    async def generate_output_stream(self) -> AsyncIterator[T | U]:
         """Generate async output stream from pipeline, maintaining order"""
         while self.running or (self.output_queue and not self.output_queue.empty()):
             try:
                 item = await asyncio.get_event_loop().run_in_executor(None, self._get_output_nowait)
+                if item is None:
+                    await asyncio.sleep(self._sleep_time)
+                    continue
+
                 if isinstance(item, PipelineItem):
                     yield item.data
                     self.completed_items.append(item)
@@ -101,14 +105,12 @@ class AsyncTaskPipeline[T]:
 
             except Exception as e:
                 logger.error(f"Error generating output: {e}")
-                await asyncio.sleep(0.001)
+                await asyncio.sleep(self._sleep_time)
 
-    def _get_output_nowait(self) -> PipelineItem[T] | None:
+    def _get_output_nowait(self) -> PipelineItem[T] | U | None:
         """Helper to get output without blocking"""
         try:
-            if self.output_queue is not None:
-                return self.output_queue.get_nowait()
-            return None
+            return None if self.output_queue is None else self.output_queue.get_nowait()
         except queue.Empty:
             return None
 
@@ -121,8 +123,8 @@ class AsyncTaskPipeline[T]:
             latency for item in self.completed_items if (latency := item.get_total_latency()) is not None
         ]
         avg_latency = sum(total_latencies) / len(total_latencies) if total_latencies else 0.0
-        min_latency = min(total_latencies) if total_latencies else 0.0
-        max_latency = max(total_latencies) if total_latencies else 0.0
+        min_latency = min(total_latencies, default=0.0)
+        max_latency = max(total_latencies, default=0.0)
 
         stage_stats = {}
 
@@ -200,8 +202,6 @@ class AsyncTaskPipeline[T]:
             stage.clear_input_queue()
 
         self.completed_items = []
-        self.output_buffer = {}
-        self.next_output_seq = 0
         self.sequence_counter = 0
 
     def clear_input_queue(self) -> None:
