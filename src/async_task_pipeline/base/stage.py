@@ -4,11 +4,9 @@ import threading
 import time
 import types
 
-from async_task_pipeline.base.sentinel import EndSentinel
-from async_task_pipeline.base.sentinel import FlushSentinel
-
 from ..utils import logger
 from ..utils.metrics import DetailedTiming
+from .item import PipelineItem
 
 
 class PipelineStage:
@@ -53,16 +51,9 @@ class PipelineStage:
         while self.running:
             try:
                 item = self.input_queue.get(timeout=1.0)
-                if item is None:
-                    break
-
-                match item:
-                    case FlushSentinel():
-                        self.output_queue.put(item)
-                        continue
-                    case EndSentinel():
-                        self.output_queue.put(item)
-                        break
+                if not isinstance(item, PipelineItem):
+                    self.output_queue.put(item)
+                    continue
 
                 item.enable_timing = self.enable_timing
                 processing_start_time = time.perf_counter()

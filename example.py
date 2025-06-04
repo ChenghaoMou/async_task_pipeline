@@ -23,12 +23,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     start_time: float | None = None
 
+    class Sentinel:
+        pass
+
     def simulate_cpu_intensive_task(
         name: str, processing_time: float, cpu_intensity: int = 1000
     ) -> Callable[[Any], Any]:
         """Factory for creating simulated CPU-intensive processing functions"""
 
         def process(data: Any) -> Any:
+            if isinstance(data, Sentinel):
+                return data
             logger.debug(f"{name} processing: {data}")
             end_time = time.perf_counter() + processing_time
             result = 0
@@ -48,12 +53,15 @@ if __name__ == "__main__":
             yield data
             if i == 0:
                 start_time = time.perf_counter()
+        yield Sentinel()
 
     async def example_output_consumer(output_stream: AsyncIterator[Any]) -> None:
         """Example async output consumer"""
         global start_time
         first_result = True
         async for result in output_stream:
+            if isinstance(result, Sentinel):
+                break
             logger.debug(f"Final output: {result}")
             if first_result:
                 first_result = False

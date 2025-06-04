@@ -5,9 +5,6 @@ import queue
 import time
 from typing import Any
 
-from async_task_pipeline.base.sentinel import EndSentinel
-from async_task_pipeline.base.sentinel import FlushSentinel
-
 from ..utils import logger
 from .item import Message
 from .item import PipelineItem
@@ -25,7 +22,6 @@ class AsyncTaskPipeline:
         self.output_queue: queue.Queue[Message] | None = None
         self.running = False
         self.sequence_counter = 0
-        self.output_buffer: dict[int, PipelineItem] = {}
         self.next_output_seq = 0
         self.completed_items: list[PipelineItem] = []
         self.enable_timing = enable_timing
@@ -53,7 +49,6 @@ class AsyncTaskPipeline:
 
     async def stop(self) -> None:
         """Stop all pipeline stages"""
-        await self.end()
         self.running = False
         for stage in reversed(self.stages):
             stage.stop()
@@ -66,16 +61,6 @@ class AsyncTaskPipeline:
                 await self.process_input_data(data, time.perf_counter())
         except Exception as e:
             logger.error(f"Error processing input stream: {e}")
-        finally:
-            await self.end_input_stream()
-
-    async def end_input_stream(self) -> None:
-        """End the input stream"""
-        if not self.running:
-            return
-        logger.info("Ending input stream")
-        if self.input_queue is not None:
-            await asyncio.get_event_loop().run_in_executor(None, self.input_queue.put, EndSentinel())
 
     async def interrupt(self) -> None:
         """Interrupt the pipeline"""
@@ -106,37 +91,13 @@ class AsyncTaskPipeline:
 
     async def generate_output_stream(self) -> AsyncIterator[Any]:
         """Generate async output stream from pipeline, maintaining order"""
-        while self.running or (self.output_queue and not self.output_queue.empty()) or self.output_buffer:
+        while self.running or (self.output_queue and not self.output_queue.empty()):
             try:
                 item = await asyncio.get_event_loop().run_in_executor(None, self._get_output_nowait)
-
-                match item:
-                    case FlushSentinel():
-                        continue
-                    case EndSentinel():
-                        break
-
-                if item is not None:
-                    self.output_buffer[item.seq_num] = item
-
-                while self.next_output_seq in self.output_buffer:
-                    ordered_item = self.output_buffer.pop(self.next_output_seq)
-
-                    self.completed_items.append(ordered_item)
-
-                    if self.enable_timing:
-                        total_latency = ordered_item.get_total_latency()
-                        stage_latencies = ordered_item.get_stage_latencies()
-                        if stage_latencies is not None:
-                            logger.info(f"Item {ordered_item.seq_num} completed - Total latency: {total_latency:.3f}s")
-                            for stage, latency in stage_latencies.items():
-                                logger.debug(f"  {stage}: {latency:.3f}s")
-
-                    yield ordered_item.data
-                    self.next_output_seq += 1
-
-                if item is None:
-                    await asyncio.sleep(0.001)
+                if isinstance(item, PipelineItem):
+                    yield item.data
+                else:
+                    yield item
 
             except Exception as e:
                 logger.error(f"Error generating output: {e}")
@@ -254,13 +215,3 @@ class AsyncTaskPipeline:
         if self.output_queue is not None:
             while not self.output_queue.empty():
                 self.output_queue.get()
-
-    async def flush(self) -> None:
-        """Flush the pipeline"""
-        if self.input_queue is not None:
-            await asyncio.get_event_loop().run_in_executor(None, self.input_queue.put, FlushSentinel())
-
-    async def end(self) -> None:
-        """End the pipeline"""
-        if self.input_queue is not None:
-            await asyncio.get_event_loop().run_in_executor(None, self.input_queue.put, EndSentinel())

@@ -8,9 +8,6 @@ from typing import cast
 from pydantic import BaseModel
 from pydantic import Field
 
-from async_task_pipeline.base.sentinel import EndSentinel
-from async_task_pipeline.base.sentinel import FlushSentinel
-
 from ..utils.metrics import DetailedTiming
 
 T = TypeVar("T")
@@ -177,4 +174,4 @@ class PipelineItem(BaseModel):
         return breakdown
 
 
-type Message = PipelineItem | FlushSentinel | EndSentinel
+type Message = PipelineItem
