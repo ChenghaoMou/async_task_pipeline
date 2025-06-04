@@ -28,7 +28,7 @@ def _wrapper(func: Callable[..., T]) -> Callable[..., T | None]:
     return wrapper
 
 
-class PipelineItem(BaseModel):
+class PipelineItem[DataT](BaseModel):
     """
     Container for data flowing through pipeline with sequence and optional timing tracking.
 
@@ -45,7 +45,7 @@ class PipelineItem(BaseModel):
     """
 
     seq_num: int
-    data: Any
+    data: DataT
     enable_timing: bool = True
     start_timestamp: float = Field(default_factory=time.perf_counter)
     _stage_timestamps: dict[str, float]
@@ -172,6 +172,3 @@ class PipelineItem(BaseModel):
             }
 
         return breakdown
-
-
-type Message = PipelineItem

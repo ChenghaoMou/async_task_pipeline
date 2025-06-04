@@ -28,10 +28,10 @@ if __name__ == "__main__":
 
     def simulate_cpu_intensive_task(
         name: str, processing_time: float, cpu_intensity: int = 1000
-    ) -> Callable[[Any], Any]:
+    ) -> Callable[[str], str]:
         """Factory for creating simulated CPU-intensive processing functions"""
 
-        def process(data: Any) -> Any:
+        def process(data: str) -> str:
             if isinstance(data, Sentinel):
                 return data
             logger.debug(f"{name} processing: {data}")
@@ -55,7 +55,7 @@ if __name__ == "__main__":
                 start_time = time.perf_counter()
         yield Sentinel()
 
-    async def example_output_consumer(output_stream: AsyncIterator[Any]) -> None:
+    async def example_output_consumer(output_stream: AsyncIterator[str]) -> None:
         """Example async output consumer"""
         global start_time
         first_result = True
@@ -76,7 +76,7 @@ if __name__ == "__main__":
         )
 
         start_time = time.perf_counter()
-        pipeline = AsyncTaskPipeline(max_queue_size=500, enable_timing=args.enable_timing)
+        pipeline = AsyncTaskPipeline[str](max_queue_size=500, enable_timing=args.enable_timing)
         pipeline.add_stage("DataValidation", simulate_cpu_intensive_task("Validate", 0.010, 500))
         pipeline.add_stage("Transform1", simulate_cpu_intensive_task("Transform1", 0.050, 1500))
         pipeline.add_stage("Transform2", simulate_cpu_intensive_task("Transform2", 0.010, 1000))

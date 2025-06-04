@@ -6,24 +6,23 @@ import time
 from typing import Any
 
 from ..utils import logger
-from .item import Message
 from .item import PipelineItem
 from .stage import PipelineStage
 
 
-class AsyncTaskPipeline:
+class AsyncTaskPipeline[T]:
     """Main pipeline orchestrator with async I/O and thread-based processing"""
 
     def __init__(self, max_queue_size: int = 100, enable_timing: bool = True):
         self.max_queue_size = max_queue_size
         self.stages: list[PipelineStage] = []
-        self.queues: list[queue.Queue[Message]] = []
-        self.input_queue: queue.Queue[Message] | None = None
-        self.output_queue: queue.Queue[Message] | None = None
+        self.queues: list[queue.Queue[PipelineItem[T]]] = []
+        self.input_queue: queue.Queue[PipelineItem[T]] | None = None
+        self.output_queue: queue.Queue[PipelineItem[T]] | None = None
         self.running = False
         self.sequence_counter = 0
         self.next_output_seq = 0
-        self.completed_items: list[PipelineItem] = []
+        self.completed_items: list[PipelineItem[T]] = []
         self.enable_timing = enable_timing
 
     def add_stage(self, name: str, process_fn: Callable) -> None:
@@ -34,7 +33,7 @@ class AsyncTaskPipeline:
         else:
             input_q = self.queues[-1]
 
-        output_q: queue.Queue[Message] = queue.Queue(maxsize=self.max_queue_size)
+        output_q: queue.Queue[PipelineItem[T]] = queue.Queue(maxsize=self.max_queue_size)
         self.queues.append(output_q)
         self.output_queue = output_q
         stage = PipelineStage(name, process_fn, input_q, output_q, enable_timing=self.enable_timing)
@@ -68,12 +67,12 @@ class AsyncTaskPipeline:
             return
         self.clear()
 
-    async def process_input_data(self, data: Any, created_at: float) -> None:
+    async def process_input_data(self, data: T, created_at: float) -> None:
         try:
             if not self.running:
                 return
 
-            item = PipelineItem(
+            item = PipelineItem[T](
                 seq_num=self.sequence_counter,
                 data=data,
                 enable_timing=self.enable_timing,
@@ -89,13 +88,14 @@ class AsyncTaskPipeline:
         except Exception as e:
             logger.error(f"Error processing input stream: {e}")
 
-    async def generate_output_stream(self) -> AsyncIterator[Any]:
+    async def generate_output_stream(self) -> AsyncIterator[T]:
         """Generate async output stream from pipeline, maintaining order"""
         while self.running or (self.output_queue and not self.output_queue.empty()):
             try:
                 item = await asyncio.get_event_loop().run_in_executor(None, self._get_output_nowait)
                 if isinstance(item, PipelineItem):
                     yield item.data
+                    self.completed_items.append(item)
                 else:
                     yield item
 
@@ -103,7 +103,7 @@ class AsyncTaskPipeline:
                 logger.error(f"Error generating output: {e}")
                 await asyncio.sleep(0.001)
 
-    def _get_output_nowait(self) -> Message | None:
+    def _get_output_nowait(self) -> PipelineItem[T] | None:
         """Helper to get output without blocking"""
         try:
             if self.output_queue is not None:
