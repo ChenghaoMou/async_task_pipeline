@@ -2,6 +2,7 @@ from collections.abc import Callable
 import queue
 import threading
 import time
+import types
 
 from async_task_pipeline.base.sentinel import EndSentinel
 from async_task_pipeline.base.sentinel import FlushSentinel
@@ -67,10 +68,20 @@ class PipelineStage:
                 processing_start_time = time.perf_counter()
                 item.record_queue_entry(self.name)
                 result_data = self.process_fn(item.data)
+                if result_data is None:
+                    continue
+
                 processing_end_time = time.perf_counter()
-                item.data = result_data
-                item.record_stage_completion(self.name)
-                self.output_queue.put(item)
+                if isinstance(result_data, types.GeneratorType):
+                    for result in result_data:
+                        item.data = result
+                        item.record_stage_completion(self.name)
+                        self.output_queue.put(item)
+                else:
+                    item.data = result_data
+                    item.record_stage_completion(self.name)
+                    self.output_queue.put(item)
+
                 transmission_end = time.perf_counter()
 
                 if self.enable_timing:
