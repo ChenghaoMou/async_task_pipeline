@@ -1,6 +1,6 @@
 [project]
 name = "async-task-pipeline"
-version = "0.1.8"
+version = "0.1.9"
 description = "A framework for processing streaming data through CPU-intensive tasks while maintaining order and tracking latency"
 readme = "README.md"
 authors = [{ name = "Chenghao Mou", email = "mouchenghao@gmail.com" }]
@@ -98,7 +98,7 @@ source = ["src"]
 branch = true
 
 [tool.bumpversion]
-current_version = "0.1.8"
+current_version = "0.1.9"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
