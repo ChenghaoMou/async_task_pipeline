@@ -86,7 +86,18 @@ class AsyncTaskPipeline[T, U]:
                 logger.debug(f"Queued input item {item.seq_num}")
 
         except Exception as e:
-            logger.error(f"Error processing input stream: {e}")
+            logger.error(f"Error processing input data: {e}")
+
+    async def process_input_sentinel(self, sentinel: U) -> None:
+        try:
+            if not self.running:
+                return
+
+            if self.input_queue is not None:
+                await asyncio.get_event_loop().run_in_executor(None, self.input_queue.put, sentinel)
+
+        except Exception as e:
+            logger.error(f"Error processing input sentinel: {e}")
 
     async def generate_output_stream(self) -> AsyncIterator[T | U]:
         """Generate async output stream from pipeline, maintaining order"""
