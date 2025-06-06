@@ -52,6 +52,9 @@ pre-commit: ## Run pre-commit checks on all files
 
 check: format lint type-check test ## Run all checks (format, lint, type-check, test)
 
+doc: ## Build the documentation
+	$(UV) run mkdocs build --clean
+
 clean-build: clean ## Clean and prepare for build
 	rm -rf dist/
 

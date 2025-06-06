@@ -10,7 +10,34 @@ from .item import PipelineItem
 
 
 class PipelineStage:
-    """Single stage in the CPU-intensive task pipeline"""
+    """Single stage in the CPU-intensive task pipeline.
+
+    Represents an individual processing stage that runs in its own thread
+    and processes items from an input queue, applying a transformation
+    function, and placing results in an output queue.
+
+    Parameters
+    ----------
+    name : str
+        Unique identifier for this stage, used in logging and timing analysis.
+    process_fn : Callable
+        Function to process data items. Should be thread-safe and accept
+        a single argument, returning processed data, None (to filter), or
+        a generator (for multiple outputs).
+    input_queue : queue.Queue
+        Queue from which to read input items for processing.
+    output_queue : queue.Queue
+        Queue to which processed items are written.
+    enable_timing : bool, default=True
+        Whether to collect detailed timing information for this stage.
+
+    Attributes
+    ----------
+    processed_count : int
+        Number of items successfully processed by this stage.
+    total_processing_time : float
+        Total time spent in processing function (when timing enabled).
+    """
 
     def __init__(
         self,
@@ -31,7 +58,16 @@ class PipelineStage:
         self.enable_timing = enable_timing
 
     def start(self) -> None:
-        """Start the worker thread for this stage"""
+        """Start the worker thread for this stage.
+
+        Creates and starts a daemon thread that will continuously process
+        items from the input queue until stopped.
+
+        Notes
+        -----
+        The worker thread is marked as daemon so it won't prevent the
+        program from exiting.
+        """
         self.running = True
         self.thread = threading.Thread(target=self._worker, name=f"Stage-{self.name}")
         self.thread.daemon = True
@@ -39,7 +75,16 @@ class PipelineStage:
         logger.info(f"Started pipeline stage: {self.name}")
 
     def stop(self) -> None:
-        """Stop the worker thread"""
+        """Stop the worker thread.
+
+        Signals the worker thread to stop and waits for it to complete.
+        Sends a sentinel value (None) to the input queue to wake up the
+        worker if it's waiting.
+
+        Notes
+        -----
+        This method blocks until the worker thread has fully stopped.
+        """
         self.running = False
         self.input_queue.put(None)
         if self.thread:
@@ -103,7 +148,17 @@ class PipelineStage:
                 logger.error(f"Error in {self.name}: {e}")
 
     def get_average_processing_time(self) -> float:
-        """Get average processing time for this stage"""
+        """Get average processing time for this stage.
+
+        Calculates the average time spent in the processing function
+        across all processed items.
+
+        Returns
+        -------
+        float
+            Average processing time in seconds, or 0.0 if timing is disabled
+            or no items have been processed.
+        """
         if not self.enable_timing:
             return 0.0
 

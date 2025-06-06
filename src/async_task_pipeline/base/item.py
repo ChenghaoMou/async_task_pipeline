@@ -13,7 +13,7 @@ from ..utils.metrics import DetailedTiming
 T = TypeVar("T")
 
 
-def _wrapper(func: Callable[..., T]) -> Callable[..., T | None]:
+def _if_timing_enabled(func: Callable[..., T]) -> Callable[..., T | None]:
     """Wrapper a function to return None if timing is disabled"""
 
     @functools.wraps(func)
@@ -27,19 +27,31 @@ def _wrapper(func: Callable[..., T]) -> Callable[..., T | None]:
 
 
 class PipelineItem[DataT](BaseModel):
-    """
-    Container for data flowing through pipeline with sequence and optional timing tracking.
+    """Container for data flowing through pipeline with sequence and timing tracking.
+
+    A wrapper class that carries data through the pipeline along with metadata
+    for tracking sequence, timing, and performance analysis. Each item maintains
+    detailed timing information as it flows through different pipeline stages.
 
     Parameters
     ----------
     seq_num : int
-        Sequence number of the item in the pipeline.
-    data : Any
-        Data flowing through the pipeline.
-    start_timestamp : float | None, optional
-        Timestamp when the item entered the pipeline. Defaults to None.
-    enable_timing : bool, optional
-        Whether to enable timing tracking. Defaults to True.
+        Unique sequence number identifying this item's position in the input stream.
+    data : DataT
+        The actual data payload being processed through the pipeline.
+    enable_timing : bool, default=True
+        Whether to collect detailed timing information for performance analysis.
+    start_timestamp : float, optional
+        Timestamp when the item entered the pipeline. Auto-generated if not provided.
+
+    Attributes
+    ----------
+    _stage_timestamps : dict[str, float]
+        Timestamps when each stage completed processing this item.
+    _detailed_timings : dict[str, DetailedTiming]
+        Detailed timing breakdowns for each stage.
+    _queue_enter_times : dict[str, float]
+        Timestamps when the item entered each stage's input queue.
     """
 
     seq_num: int
@@ -56,57 +68,79 @@ class PipelineItem[DataT](BaseModel):
         self._detailed_timings = {}
         self._queue_enter_times = {}
 
-    @_wrapper
+    @_if_timing_enabled
     def record_queue_entry(self, stage_name: str) -> None:
-        """Record when item enters a stage's input queue"""
+        """Record when item enters a stage's input queue.
+
+        Parameters
+        ----------
+        stage_name : str
+            Name of the stage whose queue the item is entering.
+        """
         self._queue_enter_times[stage_name] = time.perf_counter()
 
-    @_wrapper
+    @_if_timing_enabled
     def record_stage_completion(self, stage_name: str) -> None:
-        """Record when a stage completes processing this item"""
+        """Record when a stage completes processing this item.
+
+        Parameters
+        ----------
+        stage_name : str
+            Name of the stage that completed processing.
+        """
         self._stage_timestamps[stage_name] = time.perf_counter()
 
-    @_wrapper
+    @_if_timing_enabled
     def record_detailed_timing(self, stage_name: str, detailed_timing: DetailedTiming) -> None:
         """Record detailed timing for a stage"""
         self._detailed_timings[stage_name] = detailed_timing
 
-    @_wrapper
+    @_if_timing_enabled
     def get_queue_enter_time(self, stage_name: str) -> float | None:
         """Get the time the item entered the queue for a stage"""
         if stage_name not in self._queue_enter_times:
             return None
         return self._queue_enter_times[stage_name]
 
-    @_wrapper
+    @_if_timing_enabled
     def get_stage_completion_time(self, stage_name: str) -> float | None:
         """Get the time the item completed processing for a stage"""
         if stage_name not in self._stage_timestamps:
             return None
         return self._stage_timestamps[stage_name]
 
-    @_wrapper
+    @_if_timing_enabled
     def get_detailed_timing(self, stage_name: str) -> DetailedTiming | None:
         """Get the detailed timing for a stage"""
         if stage_name not in self._detailed_timings:
             return None
         return self._detailed_timings[stage_name]
 
-    @_wrapper
+    @_if_timing_enabled
     def get_total_latency(self) -> float | None:
-        """Calculate total end-to-end latency"""
+        """Calculate total end-to-end latency.
+
+        Computes the time from when the item entered the pipeline until
+        the last stage completed processing it.
+
+        Returns
+        -------
+        float | None
+            Total latency in seconds, or None if timing is disabled or
+            no stages have completed processing.
+        """
         if not self._stage_timestamps or self.start_timestamp is None:
             return None
 
         last_timestamp = max(self._stage_timestamps.values())
         return last_timestamp - self.start_timestamp
 
-    @_wrapper
+    @_if_timing_enabled
     def get_stage_latencies(self) -> dict[str, float] | None:
         """Calculate latency for each stage"""
         if not self._stage_timestamps or self.start_timestamp is None:
             return None
-        latencies = {}
+        latencies: dict[str, float] = {}
         sorted_stages = sorted(self._stage_timestamps.items(), key=lambda x: x[1])
 
         prev_time = self.start_timestamp
@@ -116,9 +150,21 @@ class PipelineItem[DataT](BaseModel):
 
         return latencies
 
-    @_wrapper
+    @_if_timing_enabled
     def get_timing_breakdown(self) -> dict[str, dict[str, float]] | None:
-        """Get detailed timing breakdown for each stage"""
+        """Get detailed timing breakdown for each stage.
+
+        Provides comprehensive timing analysis including queue wait times,
+        computation times, transmission times, and overall efficiency metrics.
+
+        Returns
+        -------
+        dict[str, dict[str, float]] | None
+            Dictionary with per-stage timing breakdowns and totals, including:
+            - Per-stage: queue_wait_time, computation_time, transmission_time
+            - Totals: total_computation_time, total_overhead_time, computation_ratio
+            Returns None if timing is disabled or no detailed timings available.
+        """
         if not self._detailed_timings or self.start_timestamp is None:
             return None
 

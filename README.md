@@ -11,7 +11,6 @@ A framework for processing streaming data through CPU-intensive tasks while main
 Combines async I/O with threaded CPU processing:
 - **Async streams**: Non-blocking input/output
 - **Pipeline parallelism**: Each stage runs in its own thread
-- **Order preservation**: Output maintains input sequence
 - **Latency tracking**: Monitor end-to-end and per-stage performance
 
 ## Workflow
@@ -56,13 +55,11 @@ sequenceDiagram
         T1->>Q2: put processed Item C
     end
 
-    Q4->>Main: get Item A (ordered)
+    Q4->>Main: get Item A
     Main->>Output: yield Item A
 
-    Q4->>Main: get Item B (ordered)
+    Q4->>Main: get Item B
     Main->>Output: yield Item B
-
-    Note over Main,Output: Output buffer ensures<br/>items maintain input order
 ```
 
 The asyncio event loop handles I/O operations while each pipeline stage runs in its own thread for true CPU parallelism.

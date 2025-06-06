@@ -11,7 +11,26 @@ from .stage import PipelineStage
 
 
 class AsyncTaskPipeline[T, U]:
-    """Main pipeline orchestrator with async I/O and thread-based processing"""
+    """Main pipeline orchestrator with async I/O and thread-based processing.
+
+    This class manages a multi-stage data processing pipeline that combines
+    async I/O for input/output operations with thread-based processing for
+    CPU-intensive tasks. It provides comprehensive timing analysis and
+    performance monitoring capabilities.
+
+    Parameters
+    ----------
+    max_queue_size : int, default=100
+        Maximum size for inter-stage queues. Controls memory usage and backpressure.
+    enable_timing : bool, default=False
+        Whether to enable detailed timing analysis for performance monitoring.
+
+    Examples
+    --------
+    >>> pipeline = AsyncTaskPipeline(max_queue_size=50, enable_timing=True)
+    >>> pipeline.add_stage("process", lambda x: x * 2)
+    >>> await pipeline.start()
+    """
 
     def __init__(self, max_queue_size: int = 100, enable_timing: bool = False):
         self.max_queue_size = max_queue_size
@@ -26,7 +45,28 @@ class AsyncTaskPipeline[T, U]:
         self._sleep_time = 0.001
 
     def add_stage(self, name: str, process_fn: Callable) -> None:
-        """Add a processing stage to the pipeline"""
+        """Add a processing stage to the pipeline.
+
+        Creates a new stage with the specified processing function and connects
+        it to the pipeline's queue system. Stages are executed in the order
+        they are added.
+
+        Parameters
+        ----------
+        name : str
+            Unique identifier for this stage, used in timing analysis and logging.
+        process_fn : Callable
+            Function to process data items. Should accept a single argument and
+            return processed data, None (to filter), or a generator (to produce
+            multiple outputs).
+
+        Notes
+        -----
+        The process_fn should be thread-safe as it will be executed in a
+        separate thread. If the function returns None, the item is filtered
+        out. If it returns a generator, each yielded value becomes a separate
+        pipeline item.
+        """
         if not self.queues:
             self.input_queue = queue.Queue(maxsize=self.max_queue_size)
             input_q = self.input_queue
@@ -40,21 +80,54 @@ class AsyncTaskPipeline[T, U]:
         self.stages.append(stage)
 
     async def start(self) -> None:
-        """Start all pipeline stages"""
+        """Start all pipeline stages.
+
+        Initializes and starts worker threads for all registered stages.
+        The pipeline must be started before processing any data.
+
+        Raises
+        ------
+        RuntimeError
+            If the pipeline is already running or if no stages have been added.
+        """
         self.running = True
         for stage in self.stages:
             stage.start()
         logger.info("Pipeline started")
 
     async def stop(self) -> None:
-        """Stop all pipeline stages"""
+        """Stop all pipeline stages.
+
+        Gracefully shuts down all worker threads and clears pipeline state.
+        This method should be called when pipeline processing is complete.
+
+        Notes
+        -----
+        Stages are stopped in reverse order to ensure proper cleanup.
+        Any remaining items in queues will be lost.
+        """
         self.running = False
         for stage in reversed(self.stages):
             stage.stop()
         logger.info("Pipeline stopped")
 
     async def process_input_stream(self, input_stream: AsyncIterator[Any]) -> None:
-        """Consume async input stream and feed to pipeline"""
+        """Consume async input stream and feed to pipeline.
+
+        Processes an async iterator/generator and feeds each item into the
+        pipeline for processing. This method handles the async-to-sync
+        bridge for pipeline input.
+
+        Parameters
+        ----------
+        input_stream : AsyncIterator[Any]
+            Async iterator that yields data items to be processed.
+
+        Notes
+        -----
+        This method will consume the entire input stream. For continuous
+        processing, use individual `process_input_data` calls.
+        """
         try:
             async for data in input_stream:
                 await self.process_input_data(data, time.perf_counter())
@@ -100,7 +173,23 @@ class AsyncTaskPipeline[T, U]:
             logger.error(f"Error processing input sentinel: {e}")
 
     async def generate_output_stream(self) -> AsyncIterator[T | U]:
-        """Generate async output stream from pipeline, maintaining order"""
+        """Generate async output stream from pipeline, maintaining order.
+
+        Creates an async iterator that yields processed items as they become
+        available from the pipeline. Items are yielded in the order they
+        were processed (which may differ from input order due to parallel
+        processing).
+
+        Yields
+        ------
+        T | U
+            Processed data items or sentinel values from the pipeline.
+
+        Notes
+        -----
+        This method will continue yielding items until the pipeline is stopped
+        and all queues are empty. It's typically used in an async for loop.
+        """
         while self.running or (self.output_queue and not self.output_queue.empty()):
             try:
                 item = await asyncio.get_event_loop().run_in_executor(None, self._get_output_nowait)
@@ -126,7 +215,27 @@ class AsyncTaskPipeline[T, U]:
             return None
 
     def get_latency_summary(self) -> dict[str, Any]:
-        """Get summary statistics for pipeline latency"""
+        """Get summary statistics for pipeline latency.
+
+        Computes comprehensive performance statistics including end-to-end
+        latency, per-stage timing breakdowns, and efficiency metrics.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary containing:
+            - total_items: Number of processed items
+            - avg_total_latency: Average end-to-end latency in seconds
+            - min_total_latency: Minimum latency observed
+            - max_total_latency: Maximum latency observed
+            - stage_statistics: Per-stage performance metrics
+            - overall_efficiency: Computation vs overhead ratios
+
+        Notes
+        -----
+        Only available when timing is enabled. Returns empty dict if no
+        items have been processed or timing is disabled.
+        """
         if not self.completed_items:
             return {}
 
@@ -137,15 +246,15 @@ class AsyncTaskPipeline[T, U]:
         min_latency = min(total_latencies, default=0.0)
         max_latency = max(total_latencies, default=0.0)
 
-        stage_stats = {}
+        stage_stats: dict[str, Any] = {}
 
         total_computation_ratios = []
 
         for stage in self.stages:
-            stage_latencies = []
-            stage_computation_times = []
-            stage_queue_wait_times = []
-            stage_transmission_times = []
+            stage_latencies: list[float] = []
+            stage_computation_times: list[float] = []
+            stage_queue_wait_times: list[float] = []
+            stage_transmission_times: list[float] = []
 
             for item in self.completed_items:
                 stage_latencies_dict = item.get_stage_latencies()
@@ -205,7 +314,17 @@ class AsyncTaskPipeline[T, U]:
         }
 
     def clear(self) -> None:
-        """Clear the pipeline"""
+        """Clear the pipeline state and queues.
+
+        Removes all items from input/output queues and stage queues,
+        resets completed items list, and resets the sequence counter.
+        This method is useful for resetting the pipeline between runs.
+
+        Notes
+        -----
+        This method should only be called when the pipeline is stopped.
+        Any items currently being processed may be lost.
+        """
         self.clear_input_queue()
         self.clear_output_queue()
 

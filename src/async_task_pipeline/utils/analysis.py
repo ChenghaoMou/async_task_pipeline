@@ -11,16 +11,29 @@ if TYPE_CHECKING:
 
 
 def log_pipeline_performance_analysis(pipeline: "AsyncTaskPipeline") -> None:
-    """
-    Log comprehensive performance analysis for an AsyncTaskPipeline.
+    """Log comprehensive performance analysis for an AsyncTaskPipeline.
 
-    This function provides detailed performance metrics including:
-    - Overall pipeline efficiency metrics
-    - Per-stage performance breakdown with timing details
-    - Individual item analysis for the first few processed items
+    Analyzes pipeline performance and logs detailed metrics including overall
+    efficiency, per-stage breakdowns, and individual item timing analysis.
+    This function is useful for identifying bottlenecks and optimizing
+    pipeline performance.
 
-    Args:
-        pipeline: The AsyncTaskPipeline instance to analyze
+    Parameters
+    ----------
+    pipeline : AsyncTaskPipeline
+        The pipeline instance to analyze. Must have timing enabled and
+        have processed at least one item.
+
+    Notes
+    -----
+    This function logs analysis results using the pipeline's logger.
+    If timing is disabled on the pipeline, only a warning message is logged.
+
+    Examples
+    --------
+    >>> pipeline = AsyncTaskPipeline(enable_timing=True)
+    >>> # ... process some data ...
+    >>> log_pipeline_performance_analysis(pipeline)
     """
     if not pipeline.enable_timing:
         logger.info("Pipeline timing is disabled. No analysis available.")
