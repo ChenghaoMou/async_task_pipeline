@@ -12,6 +12,7 @@ Combines async I/O with threaded CPU processing:
 - **Async streams**: Non-blocking input/output
 - **Pipeline parallelism**: Each stage runs in its own thread
 - **Latency tracking**: Monitor end-to-end and per-stage performance
+- Documentation: [Github Pages](https://chenghaomou.github.io/async_task_pipeline/)
 
 ## Workflow
 
