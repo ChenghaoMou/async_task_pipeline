@@ -1,6 +1,6 @@
 # Async CPU-Intensive Task Pipeline
 
-[![PyPI](https://img.shields.io/pypi/v/async_task_pipeline.svg?style=flat-square)](https://pypi.python.org/pypi/async_task_pipeline) [![PyPI](https://img.shields.io/pypi/l/async_task_pipeline.svg?style=flat-square)](https://pypi.python.org/pypi/async_task_pipeline)
+[![PyPI](https://img.shields.io/pypi/v/async_task_pipeline.svg?style=flat-square)](https://pypi.python.org/pypi/async_task_pipeline) [![PyPI](https://img.shields.io/pypi/l/async_task_pipeline.svg?style=flat-square)](https://pypi.python.org/pypi/async_task_pipeline) ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/async_task_pipeline)
 
 
 A framework for processing streaming data through CPU-intensive tasks while maintaining order and tracking latency.

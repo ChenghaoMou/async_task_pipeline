@@ -26,7 +26,6 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [pydantic]
-        args: [--config-file=pyproject.toml]
 
   # Security checks
   - repo: https://github.com/PyCQA/bandit
