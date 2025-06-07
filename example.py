@@ -22,7 +22,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     start_time: float | None = None
 
-    class Sentinel:
+    class EndSentinel:
         pass
 
     def simulate_cpu_intensive_task(
@@ -31,8 +31,6 @@ if __name__ == "__main__":
         """Factory for creating simulated CPU-intensive processing functions"""
 
         def process(data: str) -> str:
-            if isinstance(data, Sentinel):
-                return data
             logger.debug(f"{name} processing: {data}")
             end_time = time.perf_counter() + processing_time
             result = 0
@@ -42,26 +40,29 @@ if __name__ == "__main__":
 
         return process
 
-    async def example_input_stream(count: int = 10, delay: float = 0.1) -> AsyncIterator[str | Sentinel]:
+    async def example_input_stream(count: int = 10, delay: float = 0.1) -> AsyncIterator[str | EndSentinel]:
         """Example async input stream generator"""
         global start_time
+
         for i in range(count):
             await asyncio.sleep(delay)
             data = f"chunk_{i}"
             logger.debug(f"Generating input: {data}")
-            yield data
             if i == 0:
                 start_time = time.perf_counter()
+            yield data
 
-        yield Sentinel()
-
-    async def example_output_consumer(output_stream: AsyncIterator[str | Sentinel]) -> None:
+    async def example_output_consumer(output_stream: AsyncIterator[str | EndSentinel | BaseException]) -> None:
         """Example async output consumer"""
         global start_time
         first_result = True
         async for result in output_stream:
-            if isinstance(result, Sentinel):
+            if isinstance(result, EndSentinel):
+                logger.debug(f"Sentinel received: {result}")
                 break
+            if isinstance(result, BaseException):
+                logger.error(f"Error: {result}")
+                continue
             logger.debug(f"Final output: {result}")
             if first_result:
                 first_result = False
@@ -70,28 +71,34 @@ if __name__ == "__main__":
 
     async def main(args: argparse.Namespace) -> None:
         """Main function demonstrating the pipeline"""
+        global start_time
         logging.basicConfig(
             level=args.log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
-        start_time = time.perf_counter()
-        pipeline = AsyncTaskPipeline[str, Sentinel](max_queue_size=500, enable_timing=args.enable_timing)
+        pipeline = AsyncTaskPipeline[str, EndSentinel | BaseException](
+            max_queue_size=500, enable_timing=args.enable_timing, return_exceptions=True
+        )
         pipeline.add_stage("DataValidation", simulate_cpu_intensive_task("Validate", 0.010, 500))
         pipeline.add_stage("Transform1", simulate_cpu_intensive_task("Transform1", 0.050, 1500))
         pipeline.add_stage("Transform2", simulate_cpu_intensive_task("Transform2", 0.010, 1000))
         pipeline.add_stage("Serialize", simulate_cpu_intensive_task("Serialize", 0.005, 500))
         await pipeline.start()
 
-        tasks = [
-            asyncio.create_task(pipeline.process_input_stream(example_input_stream(50, 0.01))),
-            asyncio.create_task(example_output_consumer(pipeline.generate_output_stream())),
-        ]
+        inp_task = asyncio.create_task(pipeline.process_input_stream(example_input_stream(50, 0.01)))
+        inp_task.add_done_callback(lambda _: pipeline.put_input_sentinel(EndSentinel()))
 
+        out_task = asyncio.create_task(example_output_consumer(pipeline.generate_output_stream()))
+        tasks = [
+            inp_task,
+            out_task,
+        ]
         await asyncio.gather(*tasks)
         await pipeline.stop()
 
-        logger.debug(f"Latency: {time.perf_counter() - start_time:.4f}s")
+        if start_time is not None:
+            logger.info(f"End-to-end latency: {(time.perf_counter() - start_time):.3f}s")
         log_pipeline_performance_analysis(pipeline)
 
     asyncio.run(main(args))

@@ -7,18 +7,42 @@ theme:
     - navigation.sections
     - navigation.tabs
     - content.code.copy
+    - content.code.annotate
+    - content.footnote.tooltips
+    - content.tabs.link
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
   palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-
+  - media: (prefers-color-scheme)
+    toggle:
+      icon: material/lightbulb-auto
+      name: Switch to light mode
+  - media: '(prefers-color-scheme: light)'
+    scheme: default
+    primary: teal
+    accent: amber
+    toggle:
+      icon: material/lightbulb
+      name: Switch to dark mode
+  - media: '(prefers-color-scheme: dark)'
+    scheme: slate
+    primary: teal
+    accent: amber
+    toggle:
+      icon: material/lightbulb-outline
+      name: Switch to system preference
 nav:
   - Home: index.md
   - Examples: examples.md
@@ -36,22 +60,56 @@ plugins:
         python:
           options:
             docstring_style: numpy
-            show_source: true
+            extensions:
+            - griffe_typingdoc
             show_root_heading: true
-            show_root_toc_entry: false
+            show_root_full_path: false
+            show_if_no_docstring: true
+            inherited_members: true
             members_order: source
+            separate_signature: true
+            unwrap_annotated: false
+            filters:
+            - '!^_'
             merge_init_into_class: true
+            docstring_section_style: spacy
+            signature_crossrefs: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
 
 markdown_extensions:
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.inlinehilite
-  - pymdownx.superfences
-      # custom_fences:
-      #   - name: mermaid
-      #     class: mermaid
-      #     format: !!python/name:mermaid2.fence_mermaid_custom
-  - pymdownx.tabbed:
-      alternate_style: true
-  - admonition
-  - pymdownx.details
+  abbr: null
+  attr_list: null
+  footnotes: null
+  md_in_html: null
+  tables: null
+  toc:
+    permalink: true
+  pymdownx.betterem: null
+  pymdownx.caret: null
+  pymdownx.highlight:
+    line_spans: __span
+  pymdownx.inlinehilite: null
+  pymdownx.keys: null
+  pymdownx.mark: null
+  pymdownx.superfences:
+    custom_fences:
+    - name: mermaid
+      class: mermaid
+      format: !!python/name:pymdownx.superfences.fence_code_format ''
+  pymdownx.tilde: null
+  pymdownx.blocks.admonition:
+    types:
+    - note
+    - attention
+    - caution
+    - danger
+    - error
+    - tip
+    - hint
+    - warning
+    - info
+    - check
+  pymdownx.blocks.details: null
+  pymdownx.blocks.tab:
+    alternate_style: true

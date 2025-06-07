@@ -1,17 +1,16 @@
 # Async Task Pipeline
 
-A high-performance Python framework for processing streaming data through CPU-intensive tasks using async I/O and thread-based processing.
-
+A Python framework for processing streaming data through computation-intensive tasks with an async I/O layer.
 ## Overview
 
-The Async Task Pipeline framework provides a flexible and efficient way to build data processing pipelines that can handle streaming data with CPU-intensive tasks. It combines the benefits of async I/O for handling input/output operations with thread-based processing for CPU-bound computations.
+The Async Task Pipeline framework provides a flexible and efficient way to build data processing pipelines that can handle streaming data with computation-intensive tasks. It combines the benefits of async I/O for handling input/output operations with thread-based processing for compute-bound work.
 
 ## Key Features
 
-- **Async I/O Integration**: Seamlessly process async iterators and generators
-- **Thread-based Processing**: CPU-intensive tasks run in separate threads
+- **Async I/O Integration**: Seamlessly handle async input and output
+- **Thread-based Processing**: Compute-intensive tasks run in separate threads
 - **Performance Monitoring**: Built-in timing and latency analysis
-- **Pipeline Composition**: Chain multiple processing stages together
+- **Pipeline Composition**: Chain multiple processing tasks together with stages
 - **Error Handling**: Robust error handling and logging
 - **Memory Efficient**: Queue-based processing with configurable limits
 
@@ -70,11 +69,11 @@ sequenceDiagram
     participant Input as Async Input Stream
     participant Main as Main Thread<br/>(Asyncio Event Loop)
     participant Q1 as Input Queue
-    participant T1 as Thread 1<br/>(Stage 1: Validate)
+    participant T1 as Thread 1<br/>(Stage 1: Task 1)
     participant Q2 as Queue 1
-    participant T2 as Thread 2<br/>(Stage 2: Transform)
+    participant T2 as Thread 2<br/>(Stage 2: Task 2)
     participant Q3 as Queue 2
-    participant T3 as Thread 3<br/>(Stage 3: Serialize)
+    participant T3 as Thread 3<br/>(Stage 3: Task 3)
     participant Q4 as Output Queue
     participant Output as Async Output Stream
 
@@ -113,20 +112,11 @@ sequenceDiagram
 
 ```
 
-The asyncio event loop handles I/O operations while each pipeline stage runs in its own thread for true CPU parallelism. This design enables:
+The asyncio event loop handles I/O operations while each pipeline stage runs in its own thread for parallelism. This design enables:
 
 - **Pipeline Parallelism**: Multiple items can be processed simultaneously at different stages
-- **Order Preservation**: Output maintains the same order as input despite parallel processing
 - **Async I/O**: Non-blocking input and output operations
-- **CPU Efficiency**: True parallelism for CPU-bound tasks through threading
-
-## Use Cases
-
-- **Data Processing**: Transform streaming data with CPU-intensive operations
-- **ETL Pipelines**: Extract, transform, and load data with performance monitoring
-- **Machine Learning**: Process training data or inference requests
-- **Image/Video Processing**: Handle media files with CPU-bound transformations
-- **Log Analysis**: Process log streams in real-time
+- **Compute Efficiency**: Parallelism for CPU-bound tasks through threading (Well, still bound by GIL 🤷️)
 
 ## Installation
 

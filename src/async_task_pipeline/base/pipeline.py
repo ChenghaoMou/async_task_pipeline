@@ -16,7 +16,10 @@ class AsyncTaskPipeline[T, U]:
     This class manages a multi-stage data processing pipeline that combines
     async I/O for input/output operations with thread-based processing for
     CPU-intensive tasks. It provides comprehensive timing analysis and
-    performance monitoring capabilities.
+    performance monitoring capabilities. It takes two type parameters:
+
+    - T: The type of the data you want to process (e.g. actual data or signals)
+    - U: The type of the pass-through data (e.g. sentinel or exception)
 
     Parameters
     ----------
@@ -24,6 +27,8 @@ class AsyncTaskPipeline[T, U]:
         Maximum size for inter-stage queues. Controls memory usage and backpressure.
     enable_timing : bool, default=False
         Whether to enable detailed timing analysis for performance monitoring.
+    return_exceptions : bool, default=False
+        Whether to return exceptions in the output stream.
 
     Examples
     --------
@@ -32,8 +37,11 @@ class AsyncTaskPipeline[T, U]:
     >>> await pipeline.start()
     """
 
-    def __init__(self, max_queue_size: int = 100, enable_timing: bool = False):
+    def __init__(self, max_queue_size: int = 100, enable_timing: bool = False, return_exceptions: bool = False):
         self.max_queue_size = max_queue_size
+        self.enable_timing = enable_timing
+        self.return_exceptions = return_exceptions
+
         self.stages: list[PipelineStage] = []
         self.queues: list[queue.Queue[PipelineItem[T] | U]] = []
         self.input_queue: queue.Queue[PipelineItem[T] | U] | None = None
@@ -41,7 +49,6 @@ class AsyncTaskPipeline[T, U]:
         self.running = False
         self.sequence_counter = 0
         self.completed_items: list[PipelineItem[T]] = []
-        self.enable_timing = enable_timing
         self._sleep_time = 0.001
 
     def add_stage(self, name: str, process_fn: Callable) -> None:
@@ -76,7 +83,14 @@ class AsyncTaskPipeline[T, U]:
         output_q: queue.Queue[PipelineItem[T] | U] = queue.Queue(maxsize=self.max_queue_size)
         self.queues.append(output_q)
         self.output_queue = output_q
-        stage = PipelineStage(name, process_fn, input_q, output_q, enable_timing=self.enable_timing)
+        stage = PipelineStage(
+            name,
+            process_fn,
+            input_q,
+            output_q,
+            enable_timing=self.enable_timing,
+            return_exceptions=self.return_exceptions,
+        )
         self.stages.append(stage)
 
     async def start(self) -> None:
@@ -141,10 +155,27 @@ class AsyncTaskPipeline[T, U]:
         self.clear()
 
     async def process_input_data(self, data: T, created_at: float) -> None:
-        try:
-            if not self.running:
-                return
+        await asyncio.get_event_loop().run_in_executor(None, self.put_input_data, data, created_at)
 
+    async def process_input_sentinel(self, sentinel: U) -> None:
+        await asyncio.get_event_loop().run_in_executor(None, self.put_input_sentinel, sentinel)
+
+    def put_input_sentinel(self, sentinel: U) -> None:
+        if not self.running:
+            return
+
+        try:
+            if self.input_queue is not None:
+                self.input_queue.put(sentinel)
+        except Exception as e:
+            logger.error(f"Error putting input sentinel: {e}")
+            raise
+
+    def put_input_data(self, data: T, created_at: float) -> None:
+        if not self.running:
+            return
+
+        try:
             item = PipelineItem[T](
                 seq_num=self.sequence_counter,
                 data=data,
@@ -152,25 +183,13 @@ class AsyncTaskPipeline[T, U]:
                 start_timestamp=created_at,
             )
             self.sequence_counter += 1
-            logger.debug(f"Input delay: {(time.perf_counter() - created_at) * 1000:.3f}ms")
-
             if self.input_queue is not None:
-                await asyncio.get_event_loop().run_in_executor(None, self.input_queue.put, item)
+                logger.debug(f"Input delay: {(time.perf_counter() - created_at) * 1000:.3f}ms")
+                self.input_queue.put(item)
                 logger.debug(f"Queued input item {item.seq_num}")
-
         except Exception as e:
-            logger.error(f"Error processing input data: {e}")
-
-    async def process_input_sentinel(self, sentinel: U) -> None:
-        try:
-            if not self.running:
-                return
-
-            if self.input_queue is not None:
-                await asyncio.get_event_loop().run_in_executor(None, self.input_queue.put, sentinel)
-
-        except Exception as e:
-            logger.error(f"Error processing input sentinel: {e}")
+            logger.error(f"Error putting input data: {e}")
+            raise
 
     async def generate_output_stream(self) -> AsyncIterator[T | U]:
         """Generate async output stream from pipeline, maintaining order.
@@ -199,7 +218,8 @@ class AsyncTaskPipeline[T, U]:
 
                 if isinstance(item, PipelineItem):
                     yield item.data
-                    self.completed_items.append(item)
+                    if self.enable_timing:
+                        self.completed_items.append(item)
                 else:
                     yield item
 

@@ -4,6 +4,10 @@ import threading
 import time
 import types
 
+from returns.pipeline import is_successful
+from returns.result import ResultE
+from returns.result import safe
+
 from ..utils import logger
 from ..utils.metrics import DetailedTiming
 from .item import PipelineItem
@@ -46,9 +50,10 @@ class PipelineStage:
         input_queue: queue.Queue,
         output_queue: queue.Queue,
         enable_timing: bool = True,
+        return_exceptions: bool = False,
     ):
         self.name = name
-        self.process_fn = process_fn
+        self.process_fn = safe(process_fn)
         self.input_queue = input_queue
         self.output_queue = output_queue
         self.thread: threading.Thread | None = None
@@ -56,6 +61,7 @@ class PipelineStage:
         self.processed_count = 0
         self.total_processing_time = 0.0
         self.enable_timing = enable_timing
+        self.return_exceptions = return_exceptions
 
     def start(self) -> None:
         """Start the worker thread for this stage.
@@ -103,17 +109,30 @@ class PipelineStage:
                 item.enable_timing = self.enable_timing
                 processing_start_time = time.perf_counter()
                 item.record_queue_entry(self.name)
-                result_data = self.process_fn(item.data)
+                res: ResultE = self.process_fn(item.data)
+
+                if not is_successful(res):
+                    if self.return_exceptions:
+                        logger.error(f"Error in {self.name}: {res.failure()}")
+                        self.output_queue.put(res.failure())
+                    continue
+
+                result_data = res.unwrap()
                 if result_data is None:
                     continue
 
                 processing_end_time = time.perf_counter()
                 if isinstance(result_data, types.GeneratorType):
-                    for result in result_data:
-                        new_item = item.model_copy()
-                        new_item.data = result
-                        new_item.record_stage_completion(self.name)
-                        self.output_queue.put(new_item)
+                    try:
+                        for result in result_data:
+                            new_item = item.model_copy()
+                            new_item.data = result
+                            new_item.record_stage_completion(self.name)
+                            self.output_queue.put(new_item)
+                    except BaseException as e:
+                        if self.return_exceptions:
+                            self.output_queue.put(e)
+                        continue
                 else:
                     item.data = result_data
                     item.record_stage_completion(self.name)
