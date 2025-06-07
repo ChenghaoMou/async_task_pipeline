@@ -8,6 +8,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.11.5",
     "returns>=0.25.0",
+    "rich>=14.0.0",
 ]
 keywords = ["async", "pipeline", "streaming", "data-processing"]
 classifiers = [
@@ -51,7 +52,7 @@ path = "src/async_task_pipeline/__init__.py"
 # packages = ["src/async_task_pipeline"]
 
 [tool.mypy]
-plugins = ["pydantic.mypy"]
+plugins = ["pydantic.mypy", "returns.contrib.mypy.returns_plugin"]
 exclude = "tests"
 python_version = "3.12"
 warn_return_any = true

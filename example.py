@@ -6,7 +6,6 @@ Generic framework for streaming data through CPU-intensive processing stages
 import asyncio
 from collections.abc import AsyncIterator
 from collections.abc import Callable
-import logging
 import time
 
 from async_task_pipeline.base.pipeline import AsyncTaskPipeline
@@ -19,6 +18,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Async Task Pipeline Example")
     parser.add_argument("--enable-timing", action="store_true", help="Enable timing analysis")
     parser.add_argument("--log-level", type=str, default="INFO", help="Log level")
+    parser.add_argument(
+        "--mode", type=str, choices=["concurrent", "sequential"], default="concurrent", help="Mode of operation"
+    )
     args = parser.parse_args()
     start_time: float | None = None
 
@@ -72,23 +74,32 @@ if __name__ == "__main__":
     async def main(args: argparse.Namespace) -> None:
         """Main function demonstrating the pipeline"""
         global start_time
-        logging.basicConfig(
-            level=args.log_level,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        )
-
+        logger.setLevel(args.log_level)
         pipeline = AsyncTaskPipeline[str, EndSentinel | BaseException](
             max_queue_size=500, enable_timing=args.enable_timing, return_exceptions=True
         )
-        pipeline.add_stage("DataValidation", simulate_cpu_intensive_task("Validate", 0.010, 500))
-        pipeline.add_stage("Transform1", simulate_cpu_intensive_task("Transform1", 0.050, 1500))
-        pipeline.add_stage("Transform2", simulate_cpu_intensive_task("Transform2", 0.010, 1000))
-        pipeline.add_stage("Serialize", simulate_cpu_intensive_task("Serialize", 0.005, 500))
+        workload = [
+            ("Task1", simulate_cpu_intensive_task("Task1", 0.010, 500)),
+            ("Task2", simulate_cpu_intensive_task("Task2", 0.050, 1500)),
+            ("Task3", simulate_cpu_intensive_task("Task3", 0.010, 1000)),
+            ("Task4", simulate_cpu_intensive_task("Task4", 0.005, 500)),
+        ]
+        if args.mode == "concurrent":
+            for name, task in workload:
+                pipeline.add_stage(name, task)
+        else:
+
+            def sequential_task(data: str) -> str:
+                for name, task in workload:
+                    data = task(data)
+                return data
+
+            pipeline.add_stage("SequentialTask", sequential_task)
+
         await pipeline.start()
 
         inp_task = asyncio.create_task(pipeline.process_input_stream(example_input_stream(50, 0.01)))
         inp_task.add_done_callback(lambda _: pipeline.put_input_sentinel(EndSentinel()))
-
         out_task = asyncio.create_task(example_output_consumer(pipeline.generate_output_stream()))
         tasks = [
             inp_task,

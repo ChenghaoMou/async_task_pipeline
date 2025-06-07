@@ -6,7 +6,13 @@ the pipeline framework for consistent logging behavior.
 
 import logging
 
+from rich.logging import RichHandler
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 logger = logging.getLogger("async_task_pipeline")
+
+
 """Logger instance for the async task pipeline framework.
 
 This logger is used throughout the framework for consistent logging.

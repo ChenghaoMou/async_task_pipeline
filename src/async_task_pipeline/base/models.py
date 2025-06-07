@@ -193,7 +193,7 @@ class PipelineAnalysis(BaseModel):
     """
 
     summary: LatencySummary = Field(..., description="Overall pipeline performance summary")
-    item_breakdowns: Optional[Dict[int, ItemTimingBreakdown]] = Field(
+    item_breakdowns: Optional[list[ItemTimingBreakdown]] = Field(
         None, description="Detailed timing breakdowns for individual items"
     )
     analysis_metadata: Optional[Dict[str, Any]] = Field(None, description="Additional analysis metadata")

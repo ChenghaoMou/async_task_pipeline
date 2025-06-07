@@ -44,7 +44,6 @@ Basic pipeline usage:
 >>> # asyncio.run(main())
 """
 
-from .base.error import PipelineStatusError
 from .base.item import PipelineItem
 from .base.pipeline import AsyncTaskPipeline
 from .base.stage import PipelineStage
@@ -58,7 +57,6 @@ __all__ = [
     "AsyncTaskPipeline",
     "PipelineStage",
     "PipelineItem",
-    "PipelineStatusError",
     "logger",
     "log_pipeline_performance_analysis",
     "DetailedTiming",

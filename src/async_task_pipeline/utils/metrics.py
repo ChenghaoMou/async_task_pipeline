@@ -34,7 +34,7 @@ class DetailedTiming(BaseModel):
         float
             Duration in seconds between queue entry and processing start.
         """
-        return self.processing_start_time - self.queue_enter_time
+        return max(0, self.processing_start_time - self.queue_enter_time)
 
     @property
     def computation_time(self) -> float:
@@ -45,7 +45,7 @@ class DetailedTiming(BaseModel):
         float
             Duration in seconds of the actual processing function execution.
         """
-        return self.processing_end_time - self.processing_start_time
+        return max(0, self.processing_end_time - self.processing_start_time)
 
     @property
     def transmission_time(self) -> float:
@@ -56,4 +56,4 @@ class DetailedTiming(BaseModel):
         float
             Duration in seconds between processing completion and output queue placement.
         """
-        return self.queue_exit_time - self.processing_end_time
+        return max(0, self.queue_exit_time - self.processing_end_time)

@@ -7,8 +7,9 @@ from typing import cast
 
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import PrivateAttr
 
-from ..utils.metrics import DetailedTiming
+from async_task_pipeline.utils.metrics import DetailedTiming
 
 T = TypeVar("T")
 
@@ -27,16 +28,14 @@ def _if_timing_enabled(func: Callable[..., T]) -> Callable[..., T | None]:
 
 
 class PipelineItem[DataT](BaseModel):
-    """Container for data flowing through pipeline with sequence and timing tracking.
+    """Data container for pipeline processing.
 
     A wrapper class that carries data through the pipeline along with metadata
-    for tracking sequence, timing, and performance analysis. Each item maintains
+    for tracking timing and performance analysis. Each item maintains
     detailed timing information as it flows through different pipeline stages.
 
     Parameters
     ----------
-    seq_num : int
-        Unique sequence number identifying this item's position in the input stream.
     data : DataT
         The actual data payload being processed through the pipeline.
     enable_timing : bool, default=True
@@ -54,19 +53,12 @@ class PipelineItem[DataT](BaseModel):
         Timestamps when the item entered each stage's input queue.
     """
 
-    seq_num: int
     data: DataT
     enable_timing: bool = True
     start_timestamp: float = Field(default_factory=time.perf_counter)
-    _stage_timestamps: dict[str, float]
-    _detailed_timings: dict[str, DetailedTiming]
-    _queue_enter_times: dict[str, float]
-
-    def model_post_init(self, context: Any) -> None:
-        """Initialize the item"""
-        self._stage_timestamps = {}
-        self._detailed_timings = {}
-        self._queue_enter_times = {}
+    _stage_timestamps: dict[str, float] = PrivateAttr(default_factory=dict)
+    _detailed_timings: dict[str, DetailedTiming] = PrivateAttr(default_factory=dict)
+    _queue_enter_times: dict[str, float] = PrivateAttr(default_factory=dict)
 
     @_if_timing_enabled
     def record_queue_entry(self, stage_name: str) -> None:

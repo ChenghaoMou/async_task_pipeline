@@ -5,6 +5,15 @@ import queue
 import time
 from typing import Any
 
+from async_task_pipeline.base.models import EfficiencyMetrics
+from async_task_pipeline.base.models import ItemTimingBreakdown
+from async_task_pipeline.base.models import ItemTimingTotals
+from async_task_pipeline.base.models import LatencySummary
+from async_task_pipeline.base.models import PipelineAnalysis
+from async_task_pipeline.base.models import StageStatistics
+from async_task_pipeline.base.models import StageTimingDetail
+from async_task_pipeline.base.models import TimingBreakdown
+
 from ..utils import logger
 from .item import PipelineItem
 from .stage import PipelineStage
@@ -18,13 +27,13 @@ class AsyncTaskPipeline[T, U]:
     CPU-intensive tasks. It provides comprehensive timing analysis and
     performance monitoring capabilities. It takes two type parameters:
 
-    - T: The type of the data you want to process (e.g. actual data or signals)
-    - U: The type of the pass-through data (e.g. sentinel or exception)
+    - T: The type of the data you want to process (e.g. messages, signals or events)
+    - U: The type of the pass-through data (e.g. exceptions)
 
     Parameters
     ----------
     max_queue_size : int, default=100
-        Maximum size for inter-stage queues. Controls memory usage and backpressure.
+        Maximum size for inter-stage queues. Controls memory usage and back pressure.
     enable_timing : bool, default=False
         Whether to enable detailed timing analysis for performance monitoring.
     return_exceptions : bool, default=False
@@ -47,7 +56,7 @@ class AsyncTaskPipeline[T, U]:
         self.input_queue: queue.Queue[PipelineItem[T] | U] | None = None
         self.output_queue: queue.Queue[PipelineItem[T] | U] | None = None
         self.running = False
-        self.sequence_counter = 0
+        self.counter = 0
         self.completed_items: list[PipelineItem[T]] = []
         self._sleep_time = 0.001
 
@@ -147,6 +156,7 @@ class AsyncTaskPipeline[T, U]:
                 await self.process_input_data(data, time.perf_counter())
         except Exception as e:
             logger.error(f"Error processing input stream: {e}")
+            raise
 
     async def interrupt(self) -> None:
         """Interrupt the pipeline"""
@@ -161,32 +171,67 @@ class AsyncTaskPipeline[T, U]:
         await asyncio.get_event_loop().run_in_executor(None, self.put_input_sentinel, sentinel)
 
     def put_input_sentinel(self, sentinel: U) -> None:
+        """
+        Put a sentinel value into the input queue.
+
+        This method is used to signal the end of the input stream.
+        It is typically used in conjunction with `process_input_stream`.
+
+        Parameters
+        ----------
+        sentinel : U
+            The sentinel value to put into the input queue.
+
+        Raises
+        ------
+        RuntimeError
+            If the pipeline is not running.
+        """
         if not self.running:
-            return
+            raise RuntimeError("Pipeline is not running")
 
         try:
             if self.input_queue is not None:
                 self.input_queue.put(sentinel)
+            else:
+                raise RuntimeError("Input queue is not initialized")
         except Exception as e:
             logger.error(f"Error putting input sentinel: {e}")
             raise
 
     def put_input_data(self, data: T, created_at: float) -> None:
+        """
+        Put data into the input queue.
+
+        This method is used to feed data into the pipeline.
+        It is typically used in conjunction with `process_input_data`.
+
+        Parameters
+        ----------
+        data : T
+            The data to put into the input queue.
+        created_at : float
+            The timestamp when the data was created.
+
+        Raises
+        ------
+        RuntimeError
+            If the pipeline is not running.
+        """
         if not self.running:
-            return
+            raise RuntimeError("Pipeline is not running")
 
         try:
             item = PipelineItem[T](
-                seq_num=self.sequence_counter,
                 data=data,
                 enable_timing=self.enable_timing,
                 start_timestamp=created_at,
             )
-            self.sequence_counter += 1
             if self.input_queue is not None:
-                logger.debug(f"Input delay: {(time.perf_counter() - created_at) * 1000:.3f}ms")
                 self.input_queue.put(item)
-                logger.debug(f"Queued input item {item.seq_num}")
+                self.counter += 1
+            else:
+                raise RuntimeError("Input queue is not initialized")
         except Exception as e:
             logger.error(f"Error putting input data: {e}")
             raise
@@ -234,7 +279,7 @@ class AsyncTaskPipeline[T, U]:
         except queue.Empty:
             return None
 
-    def get_latency_summary(self) -> dict[str, Any]:
+    def get_report(self, include_item_details: bool = True) -> PipelineAnalysis | None:
         """Get summary statistics for pipeline latency.
 
         Computes comprehensive performance statistics including end-to-end
@@ -253,11 +298,11 @@ class AsyncTaskPipeline[T, U]:
 
         Notes
         -----
-        Only available when timing is enabled. Returns empty dict if no
+        Only available when timing is enabled. Returns None if no
         items have been processed or timing is disabled.
         """
         if not self.completed_items:
-            return {}
+            return None
 
         total_latencies = [
             latency for item in self.completed_items if (latency := item.get_total_latency()) is not None
@@ -266,7 +311,7 @@ class AsyncTaskPipeline[T, U]:
         min_latency = min(total_latencies, default=0.0)
         max_latency = max(total_latencies, default=0.0)
 
-        stage_stats: dict[str, Any] = {}
+        stage_stats: dict[str, StageStatistics] = {}
 
         total_computation_ratios = []
 
@@ -297,41 +342,72 @@ class AsyncTaskPipeline[T, U]:
                     sum(stage_transmission_times) / len(stage_transmission_times) if stage_transmission_times else 0.0
                 )
 
-                stage_stats[stage.name] = {
-                    "avg_latency": sum(stage_latencies) / len(stage_latencies),
-                    "min_latency": min(stage_latencies),
-                    "max_latency": max(stage_latencies),
-                    "processed_count": stage.processed_count,
-                    "avg_processing_time": stage.get_average_processing_time(),
-                    "timing_breakdown": {
-                        "avg_computation_time": avg_computation,
-                        "avg_queue_wait_time": avg_queue_wait,
-                        "avg_transmission_time": avg_transmission,
-                        "computation_ratio": avg_computation / (avg_computation + avg_queue_wait + avg_transmission)
+                stage_stats[stage.name] = StageStatistics(
+                    avg_latency=sum(stage_latencies) / len(stage_latencies),
+                    min_latency=min(stage_latencies),
+                    max_latency=max(stage_latencies),
+                    processed_count=stage.processed_count,
+                    avg_processing_time=stage.get_average_processing_time(),
+                    timing_breakdown=TimingBreakdown(
+                        avg_computation_time=avg_computation,
+                        avg_queue_wait_time=avg_queue_wait,
+                        avg_transmission_time=avg_transmission,
+                        computation_ratio=avg_computation / (avg_computation + avg_queue_wait + avg_transmission)
                         if (avg_computation + avg_queue_wait + avg_transmission) > 0
                         else 0.0,
-                    },
-                }
+                    ),
+                )
 
+        item_breakdowns: list[ItemTimingBreakdown] = []
         for item in self.completed_items:
             if (breakdown := item.get_timing_breakdown()) is not None and "totals" in breakdown:
                 total_computation_ratios.append(breakdown["totals"]["computation_ratio"])
+                if include_item_details:
+                    item_breakdowns.append(
+                        ItemTimingBreakdown(
+                            totals=ItemTimingTotals(
+                                total_computation_time=breakdown["totals"]["total_computation_time"],
+                                total_overhead_time=breakdown["totals"]["total_overhead_time"],
+                                total_latency=breakdown["totals"]["total_latency"],
+                                computation_ratio=breakdown["totals"]["computation_ratio"],
+                            ),
+                            stages={
+                                stage_name: StageTimingDetail(
+                                    queue_wait_time=stage_data["queue_wait_time"],
+                                    computation_time=stage_data["computation_time"],
+                                    transmission_time=stage_data["transmission_time"],
+                                    total_stage_time=stage_data["total_stage_time"],
+                                )
+                                for stage_name, stage_data in breakdown.items()
+                                if stage_name != "totals" and isinstance(stage_data, dict)
+                            },
+                        )
+                    )
 
         avg_computation_ratio = (
             sum(total_computation_ratios) / len(total_computation_ratios) if total_computation_ratios else 0.0
         )
 
-        return {
-            "total_items": len(self.completed_items),
-            "avg_total_latency": avg_latency,
-            "min_total_latency": min_latency,
-            "max_total_latency": max_latency,
-            "stage_statistics": stage_stats,
-            "overall_efficiency": {
-                "computation_efficiency": avg_computation_ratio,
-                "overhead_ratio": 1.0 - avg_computation_ratio,
+        return PipelineAnalysis(
+            summary=LatencySummary(
+                total_items=len(self.completed_items),
+                avg_total_latency=avg_latency,
+                min_total_latency=min_latency,
+                max_total_latency=max_latency,
+                stage_statistics=stage_stats,
+                overall_efficiency=EfficiencyMetrics(
+                    computation_efficiency=avg_computation_ratio,
+                    overhead_ratio=1.0 - avg_computation_ratio,
+                ),
+            ),
+            item_breakdowns=item_breakdowns,
+            analysis_metadata={
+                "analysis_timestamp": time.time(),
+                "enable_timing": self.enable_timing,
+                "total_stages": len(self.stages),
+                "pipeline_running": self.running,
             },
-        }
+        )
 
     def clear(self) -> None:
         """Clear the pipeline state and queues.
@@ -352,7 +428,7 @@ class AsyncTaskPipeline[T, U]:
             stage.clear_input_queue()
 
         self.completed_items = []
-        self.sequence_counter = 0
+        self.counter = 0
 
     def clear_input_queue(self) -> None:
         """Clear the input queue"""

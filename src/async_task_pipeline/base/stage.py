@@ -8,9 +8,13 @@ from returns.pipeline import is_successful
 from returns.result import ResultE
 from returns.result import safe
 
-from ..utils import logger
-from ..utils.metrics import DetailedTiming
-from .item import PipelineItem
+from async_task_pipeline.base.item import PipelineItem
+from async_task_pipeline.utils import logger
+from async_task_pipeline.utils.metrics import DetailedTiming
+
+
+class EndSignal:
+    pass
 
 
 class PipelineStage:
@@ -92,7 +96,7 @@ class PipelineStage:
         This method blocks until the worker thread has fully stopped.
         """
         self.running = False
-        self.input_queue.put(None)
+        self.input_queue.put(EndSignal())
         if self.thread:
             self.thread.join()
         logger.info(f"Stopped pipeline stage: {self.name}")
@@ -102,6 +106,8 @@ class PipelineStage:
         while self.running:
             try:
                 item = self.input_queue.get(timeout=1.0)
+                if isinstance(item, EndSignal):
+                    break
                 if not isinstance(item, PipelineItem):
                     self.output_queue.put(item)
                     continue
@@ -153,7 +159,7 @@ class PipelineStage:
                     self.total_processing_time += process_time
 
                     logger.debug(
-                        f"{self.name} processed item {item.seq_num}: "
+                        f"{self.name} processed item: "
                         f"queue_wait={detailed_timing.queue_wait_time * 1000:.2f}ms, "
                         f"computation={detailed_timing.computation_time * 1000:.2f}ms, "
                         f"transmission={detailed_timing.transmission_time * 1000:.2f}ms"
