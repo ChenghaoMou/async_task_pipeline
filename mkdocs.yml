@@ -2,6 +2,9 @@ site_name: "Async Task Pipeline"
 site_description: "A framework for processing streaming data through CPU-intensive tasks"
 
 theme:
+  font:
+    text: IBM Plex Sans
+    code: JetBrains Mono
   name: "material"
   features:
     - navigation.sections
