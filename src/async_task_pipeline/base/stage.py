@@ -38,13 +38,6 @@ class PipelineStage:
         Queue to which processed items are written.
     enable_timing : bool, default=True
         Whether to collect detailed timing information for this stage.
-
-    Attributes
-    ----------
-    processed_count : int
-        Number of items successfully processed by this stage.
-    total_processing_time : float
-        Total time spent in processing function (when timing enabled).
     """
 
     def __init__(

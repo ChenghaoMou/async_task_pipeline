@@ -287,14 +287,9 @@ class AsyncTaskPipeline[T, U]:
 
         Returns
         -------
-        dict[str, Any]
-            Dictionary containing:
-            - total_items: Number of processed items
-            - avg_total_latency: Average end-to-end latency in seconds
-            - min_total_latency: Minimum latency observed
-            - max_total_latency: Maximum latency observed
-            - stage_statistics: Per-stage performance metrics
-            - overall_efficiency: Computation vs overhead ratios
+        PipelineAnalysis | None
+            Pipeline analysis including summary statistics and detailed item breakdowns.
+            Returns None if no items have been processed or timing is disabled.
 
         Notes
         -----

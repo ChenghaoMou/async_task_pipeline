@@ -42,15 +42,6 @@ class PipelineItem[DataT](BaseModel):
         Whether to collect detailed timing information for performance analysis.
     start_timestamp : float, optional
         Timestamp when the item entered the pipeline. Auto-generated if not provided.
-
-    Attributes
-    ----------
-    _stage_timestamps : dict[str, float]
-        Timestamps when each stage completed processing this item.
-    _detailed_timings : dict[str, DetailedTiming]
-        Detailed timing breakdowns for each stage.
-    _queue_enter_times : dict[str, float]
-        Timestamps when the item entered each stage's input queue.
     """
 
     data: DataT
