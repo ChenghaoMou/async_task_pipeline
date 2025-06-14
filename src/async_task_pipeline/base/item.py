@@ -3,7 +3,6 @@ import functools
 import time
 from typing import Any
 from typing import TypeVar
-from typing import cast
 
 from pydantic import BaseModel
 from pydantic import Field
@@ -20,8 +19,10 @@ def _if_timing_enabled(func: Callable[..., T]) -> Callable[..., T | None]:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> T | None:
         if not args:
-            return None
-        _self = cast("PipelineItem", args[0])
+            return func(*args, **kwargs)
+        if not isinstance(args[0], PipelineItem):
+            return func(*args, **kwargs)
+        _self = args[0]
         return func(*args, **kwargs) if _self.enable_timing else None
 
     return wrapper
@@ -47,12 +48,12 @@ class PipelineItem[DataT](BaseModel):
     data: DataT
     enable_timing: bool = True
     start_timestamp: float = Field(default_factory=time.perf_counter)
-    _stage_timestamps: dict[str, float] = PrivateAttr(default_factory=dict)
+    _completion_timestamps: dict[str, float] = PrivateAttr(default_factory=dict)
     _detailed_timings: dict[str, DetailedTiming] = PrivateAttr(default_factory=dict)
-    _queue_enter_times: dict[str, float] = PrivateAttr(default_factory=dict)
+    _entry_timestamps: dict[str, float] = PrivateAttr(default_factory=dict)
 
     @_if_timing_enabled
-    def record_queue_entry(self, stage_name: str) -> None:
+    def record_entry_time(self, stage_name: str) -> None:
         """Record when item enters a stage's input queue.
 
         Parameters
@@ -60,10 +61,10 @@ class PipelineItem[DataT](BaseModel):
         stage_name : str
             Name of the stage whose queue the item is entering.
         """
-        self._queue_enter_times[stage_name] = time.perf_counter()
+        self._entry_timestamps[stage_name] = time.perf_counter()
 
     @_if_timing_enabled
-    def record_stage_completion(self, stage_name: str) -> None:
+    def record_completion_time(self, stage_name: str) -> None:
         """Record when a stage completes processing this item.
 
         Parameters
@@ -71,7 +72,7 @@ class PipelineItem[DataT](BaseModel):
         stage_name : str
             Name of the stage that completed processing.
         """
-        self._stage_timestamps[stage_name] = time.perf_counter()
+        self._completion_timestamps[stage_name] = time.perf_counter()
 
     @_if_timing_enabled
     def record_detailed_timing(self, stage_name: str, detailed_timing: DetailedTiming) -> None:
@@ -79,18 +80,18 @@ class PipelineItem[DataT](BaseModel):
         self._detailed_timings[stage_name] = detailed_timing
 
     @_if_timing_enabled
-    def get_queue_enter_time(self, stage_name: str) -> float | None:
+    def get_entry_time(self, stage_name: str) -> float | None:
         """Get the time the item entered the queue for a stage"""
-        if stage_name not in self._queue_enter_times:
+        if stage_name not in self._entry_timestamps:
             return None
-        return self._queue_enter_times[stage_name]
+        return self._entry_timestamps[stage_name]
 
     @_if_timing_enabled
-    def get_stage_completion_time(self, stage_name: str) -> float | None:
+    def get_completion_time(self, stage_name: str) -> float | None:
         """Get the time the item completed processing for a stage"""
-        if stage_name not in self._stage_timestamps:
+        if stage_name not in self._completion_timestamps:
             return None
-        return self._stage_timestamps[stage_name]
+        return self._completion_timestamps[stage_name]
 
     @_if_timing_enabled
     def get_detailed_timing(self, stage_name: str) -> DetailedTiming | None:
@@ -112,19 +113,19 @@ class PipelineItem[DataT](BaseModel):
             Total latency in seconds, or None if timing is disabled or
             no stages have completed processing.
         """
-        if not self._stage_timestamps or self.start_timestamp is None:
+        if not self._completion_timestamps or self.start_timestamp is None:
             return None
 
-        last_timestamp = max(self._stage_timestamps.values())
+        last_timestamp = max(self._completion_timestamps.values())
         return last_timestamp - self.start_timestamp
 
     @_if_timing_enabled
     def get_stage_latencies(self) -> dict[str, float] | None:
         """Calculate latency for each stage"""
-        if not self._stage_timestamps or self.start_timestamp is None:
+        if not self._completion_timestamps or self.start_timestamp is None:
             return None
         latencies: dict[str, float] = {}
-        sorted_stages = sorted(self._stage_timestamps.items(), key=lambda x: x[1])
+        sorted_stages = sorted(self._completion_timestamps.items(), key=lambda x: x[1])
 
         prev_time = self.start_timestamp
         for stage_name, timestamp in sorted_stages:
@@ -187,18 +188,17 @@ class PipelineItem[DataT](BaseModel):
 
             last_time = event_time
 
-        end_time = self.start_timestamp + total_latency if total_latency else 0.0
+        end_time = self.start_timestamp + (total_latency or 0.0)
         if computing_stages and last_time < end_time:
             total_computation_time += end_time - last_time
 
         total_overhead_time = total_latency - total_computation_time if total_latency else 0.0
 
-        if breakdown:
-            breakdown["totals"] = {
-                "total_computation_time": total_computation_time,
-                "total_overhead_time": total_overhead_time,
-                "total_latency": total_latency if total_latency is not None else 0.0,
-                "computation_ratio": (total_computation_time / total_latency) if total_latency else 0.0,
-            }
+        breakdown["totals"] = {
+            "total_computation_time": total_computation_time,
+            "total_overhead_time": total_overhead_time,
+            "total_latency": total_latency if total_latency is not None else 0.0,
+            "computation_ratio": (total_computation_time / total_latency) if total_latency else 0.0,
+        }
 
         return breakdown

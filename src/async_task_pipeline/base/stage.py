@@ -107,7 +107,7 @@ class PipelineStage:
 
                 item.enable_timing = self.enable_timing
                 processing_start_time = time.perf_counter()
-                item.record_queue_entry(self.name)
+                item.record_entry_time(self.name)
                 res: ResultE = self.process_fn(item.data)
 
                 if not is_successful(res):
@@ -126,7 +126,7 @@ class PipelineStage:
                         for result in result_data:
                             new_item = item.model_copy()
                             new_item.data = result
-                            new_item.record_stage_completion(self.name)
+                            new_item.record_completion_time(self.name)
                             self.output_queue.put(new_item)
                     except BaseException as e:
                         if self.return_exceptions:
@@ -134,14 +134,14 @@ class PipelineStage:
                         continue
                 else:
                     item.data = result_data
-                    item.record_stage_completion(self.name)
+                    item.record_completion_time(self.name)
                     self.output_queue.put(item)
 
                 transmission_end = time.perf_counter()
 
                 if self.enable_timing:
                     detailed_timing = DetailedTiming(
-                        queue_enter_time=item.get_queue_enter_time(self.name),
+                        queue_enter_time=item.get_entry_time(self.name),
                         processing_start_time=processing_start_time,
                         processing_end_time=processing_end_time,
                         queue_exit_time=transmission_end,

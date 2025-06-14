@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING
 
 from .logging import logger
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from ..base.pipeline import AsyncTaskPipeline
 
 
-def log_pipeline_performance_analysis(pipeline: "AsyncTaskPipeline") -> None:
+def log_pipeline_performance_analysis(pipeline: "AsyncTaskPipeline") -> None:  # pragma: no cover
     """Log comprehensive performance analysis for an AsyncTaskPipeline.
 
     Analyzes pipeline performance and logs detailed metrics including overall
