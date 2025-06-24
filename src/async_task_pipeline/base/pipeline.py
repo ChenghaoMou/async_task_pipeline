@@ -4,6 +4,8 @@ from collections.abc import Callable
 import queue
 import time
 from typing import Any
+from typing import Generic
+from typing import TypeVar
 
 from async_task_pipeline.base.models import EfficiencyMetrics
 from async_task_pipeline.base.models import ItemTimingBreakdown
@@ -18,8 +20,11 @@ from ..utils import logger
 from .item import PipelineItem
 from .stage import PipelineStage
 
+T = TypeVar("T")
+U = TypeVar("U")
 
-class AsyncTaskPipeline[T, U]:
+
+class AsyncTaskPipeline(Generic[T, U]):
     """Main pipeline orchestrator with async I/O and thread-based processing.
 
     This class manages a multi-stage data processing pipeline that combines

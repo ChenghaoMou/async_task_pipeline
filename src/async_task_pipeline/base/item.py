@@ -2,6 +2,7 @@ from collections.abc import Callable
 import functools
 import time
 from typing import Any
+from typing import Generic
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ from pydantic import PrivateAttr
 from async_task_pipeline.utils.metrics import DetailedTiming
 
 T = TypeVar("T")
+DataT = TypeVar("DataT")
 
 
 def _if_timing_enabled(func: Callable[..., T]) -> Callable[..., T | None]:
@@ -28,7 +30,7 @@ def _if_timing_enabled(func: Callable[..., T]) -> Callable[..., T | None]:
     return wrapper
 
 
-class PipelineItem[DataT](BaseModel):
+class PipelineItem(BaseModel, Generic[DataT]):
     """Data container for pipeline processing.
 
     A wrapper class that carries data through the pipeline along with metadata

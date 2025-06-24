@@ -4,12 +4,8 @@ version = "0.1.9"
 description = "A framework for processing streaming data through CPU-intensive tasks while maintaining order and tracking latency"
 readme = "README.md"
 authors = [{ name = "Chenghao Mou", email = "mouchenghao@gmail.com" }]
-requires-python = ">=3.12"
-dependencies = [
-    "pydantic>=2.11.5",
-    "returns>=0.25.0",
-    "rich>=14.0.0",
-]
+requires-python = ">=3.11, <3.12"
+dependencies = ["pydantic>=2.11.5", "returns>=0.25.0", "rich>=14.0.0"]
 keywords = ["async", "pipeline", "streaming", "data-processing"]
 classifiers = [
     "Development Status :: 3 - Alpha",
